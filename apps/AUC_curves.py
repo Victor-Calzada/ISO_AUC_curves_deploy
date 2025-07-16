@@ -78,7 +78,7 @@ def _(
         for cui in range(len(Cu2)):
             ZT[nii, cui] = simpson(y=TTS_eval(pf, Cu2[cui], Ni2[nii], Mn, P, T, Fl), x=Fl*1e-23)
 
-    AUC = simpson(y = np.array([TTS_eval(pf, cu=df_plotter["Cu"].to_numpy(), ni=df_plotter["Ni"].to_numpy(), mn=Mn, p=P, t=T, fl=Fli) for Fli in Fl]), x=Fl*1e-23, axis=0)
+
     fig = go.Figure()
     _max = int(np.max(ZT))
     fig.add_trace(go.Contour(z = ZT,x=Cu2, y=Ni2,  contours_coloring='lines',colorscale="Sunsetdark", contours=dict(showlabels=True, start=0, end=_max, size=200),showscale=False, hoverinfo="none"))
@@ -88,20 +88,20 @@ def _(
                     title='AUC', # Título de la barra de color
                     # Puedes ajustar los ticks si lo necesitas
                     # tickvals=[0, 100, 200, 300, 400]
-                ), showscale=True,line=dict(width=0.3, color='DarkSlateGrey'),cmin=np.min(ZT),cmax=np.max(ZT)),customdata=AUC,hoverinfo="none", showlegend=False))
+                ), showscale=True,line=dict(width=0.3, color='DarkSlateGrey'),cmin=np.min(ZT),cmax=np.max(ZT)),hoverinfo="none", showlegend=False))
     aux_df, dist = df_and_dist(df_plotter, P, Mn, T, pf)
     if aux_df.shape[0] != 0:
 
-
+        AUC = simpson(y = np.array([TTS_eval(pf, cu=aux_df["Cu"].to_numpy(), ni=aux_df["Ni"].to_numpy(), mn=Mn, p=P, t=T, fl=Fli) for Fli in Fl]), x=Fl*1e-23, axis=0)
         fig.add_trace(go.Scatter(x=aux_df["Cu"], y=aux_df["Ni"], mode="markers",  
-                                     marker=dict(color=AUC[aux_df.index],colorscale='Sunsetdark', opacity=dist,
+                                     marker=dict(color=AUC,colorscale='Sunsetdark', opacity=dist,
                     colorbar=dict(
                         title='AUC', # Título de la barra de color
                         # Puedes ajustar los ticks si lo necesitas
                         # tickvals=[0, 100, 200, 300, 400]
                     ), showscale=True,
                                                  line=dict(width=0.3, color='DarkSlateGrey'), cmin=np.min(ZT),cmax=np.max(ZT)),
-                                     customdata=AUC[aux_df.index],
+                                     customdata=AUC,
                                      hovertemplate=(
                     "<b>X:</b> %{x:.2f}<br>" +  # Muestra el valor X, formateado a 2 decimales
                     "<b>Y:</b> %{y:.2f}<br>" +  # Muestra el valor Y, formateado a 2 decimales
