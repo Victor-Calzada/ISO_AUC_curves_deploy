@@ -76,7 +76,7 @@ def _(
 
     for nii in range(len(Ni2)):
         for cui in range(len(Cu2)):
-            ZT[nii, cui] = simpson(TTS_eval(pf, Cu2[cui], Ni2[nii], Mn, P, T, Fl), Fl*1e-23)
+            ZT[nii, cui] = simpson(y=TTS_eval(pf, Cu2[cui], Ni2[nii], Mn, P, T, Fl), x=Fl*1e-23)
 
     AUC = simpson(y = np.array([TTS_eval(pf, cu=df_plotter["Cu"].to_numpy(), ni=df_plotter["Ni"].to_numpy(), mn=Mn, p=P, t=T, fl=Fli) for Fli in Fl]), x=Fl*1e-23, axis=0)
     fig = go.Figure()
@@ -116,9 +116,9 @@ def _(
 
 @app.cell
 def _(Mn, Mnslide, P, Pslide, T, Tslide, df_plotter, mo, pfdrop):
-    commands = mo.vstack([mo.hstack([Tslide, mo.md(f"{T=:.2f}$\pm$ {df_plotter['Temperature_Celsius'].std()/2:.2f}")], justify="center"), 
-               mo.hstack([Mnslide, mo.md(f"{Mn=:.3f}$\pm$ {df_plotter['Mn'].std()/2:.3f}")], justify="center"), 
-               mo.hstack([Pslide, mo.md(f"{P=:.3f}$\pm$ {df_plotter['P'].std()/2:.3f}")], justify="center"), 
+    commands = mo.vstack([mo.hstack([Tslide, mo.md(f"{T=:.2f} +- {df_plotter['Temperature_Celsius'].std()/2:.2f}")], justify="center"), 
+               mo.hstack([Mnslide, mo.md(f"{Mn=:.3f} +- {df_plotter['Mn'].std()/2:.3f}")], justify="center"), 
+               mo.hstack([Pslide, mo.md(f"{P=:.3f} +- {df_plotter['P'].std()/2:.3f}")], justify="center"), 
                mo.hstack([pfdrop], justify="center")])
     return (commands,)
 
