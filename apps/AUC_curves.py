@@ -5,7 +5,7 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _(mo, np, pd):
+def _(mo, np, pl):
 
     Cu2 = np.arange(0, 0.5, 0.033) 
     Ni2 = np.arange(0, 1.8, 0.133) 
@@ -19,8 +19,7 @@ def _(mo, np, pd):
 
     # -----------------------------
     file = mo.notebook_location() / "public" / "df_plotter.csv"
-    df_plotter = pd.read_csv(str(file))
-    df_plotter.reset_index(drop=True, inplace=True)
+    df_plotter = pl.read_csv(str(file))
     return Cu2, Fl, Ni2, df_plotter
 
 
@@ -144,11 +143,11 @@ def _():
 @app.cell
 def _():
     import numpy as np
-    import pandas as pd
+    import polars as pl
     from scipy.integrate import simpson
     from itertools import product
 
-    return np, pd, simpson
+    return np, pl, simpson
 
 
 @app.cell
@@ -190,33 +189,74 @@ def _(np):
 
 
 @app.cell
-def _(np):
-    def df_and_dist(df, P, Mn, T, pf):
-        stdP = df["P"].std()/2
-        stdMn = df["Mn"].std()/2
-        stdT = df["Temperature_Celsius"].std()/2
+def _(np, pl):
+    def df_and_dist(df: pl.DataFrame, P: float, Mn: float, T: float, pf: str):
+        """
+        Filters a Polars DataFrame based on specified parameters (P, Mn, T, pf)
+        and calculates a normalized Euclidean distance for the filtered data.
 
-        aux_df = df[(df["Product_Form"] == pf) & ((df["P"] > P-stdP) & ((df["P"] < P+stdP))) & 
-            ((df["Mn"] > Mn-stdMn) & ((df["Mn"] < Mn+stdMn))) & 
-            ((df["Temperature_Celsius"] > T-stdT) & ((df["Temperature_Celsius"] < T+stdT)))]
-        if aux_df.shape[0]==0:
-            return aux_df, [0]
+        Args:
+            df (pl.DataFrame): The input Polars DataFrame.
+            P (float): Reference value for 'P' column.
+            Mn (float): Reference value for 'Mn' column.
+            T (float): Reference value for 'Temperature_Celsius' column.
+            pf (str): Reference value for 'Product_Form' column.
+
+        Returns:
+            tuple[pl.DataFrame, np.ndarray]: A tuple containing:
+                - aux_df (pl.DataFrame): The filtered DataFrame.
+                - dist (np.ndarray): A NumPy array of normalized distances.
+        """
+        # Calculate half standard deviation for each numerical column
+        # Polars Series have a .std() method similar to Pandas
+        stdP = df["P"].std() / 2
+        stdMn = df["Mn"].std() / 2
+        stdT = df["Temperature_Celsius"].std() / 2
+
+        # Filter the DataFrame using Polars' .filter() method and pl.col() for expressions.
+        # Using .is_between() for cleaner range checks.
+        aux_df = df.filter(
+            (pl.col("Product_Form") == pf) &
+            (pl.col("P").is_between(P - stdP, P + stdP)) &
+            (pl.col("Mn").is_between(Mn - stdMn, Mn + stdMn)) &
+            (pl.col("Temperature_Celsius").is_between(T - stdT, T + stdT))
+        )
+
+        # Check if the filtered DataFrame is empty
+        # In Polars, df.height gives the number of rows
+        if aux_df.height == 0:
+            return aux_df, np.array([0.0]) # Return a NumPy array for consistency
+
+        # Extract columns as NumPy arrays for distance calculation
+        # Polars Series also have a .to_numpy() method
         px = aux_df["P"].to_numpy()
         mny = aux_df["Mn"].to_numpy()
         Tz = aux_df["Temperature_Celsius"].to_numpy()
 
+        # Calculate squared differences
         dpx = (px - P)**2
         dmny = (mny - Mn)**2
         dTz = (Tz - T)**2
 
+        # Calculate Euclidean distance
         dist = np.sqrt(dpx + dmny + dTz)
+
+        # Normalize the distance to a range (0.5 to 1.0)
         min_orig = np.min(dist)
         max_orig = np.max(dist)
+
         if max_orig == min_orig:
-            dist=np.ones(len(dist))
+            # If all distances are the same, set them to 1.0 (or 0.5 depending on desired behavior)
+            # The original code set to np.ones(len(dist)), which would be 1.0.
+            # Given the normalization to 0.5 + ..., setting to 0.5 or 1.0 might be more consistent.
+            # Sticking to the original's np.ones for now, which implies a normalized value of 1.
+            dist = np.ones(len(dist))
         else:
             normalized_to_0_1 = (dist - min_orig) / (max_orig - min_orig)
-            dist = 0.5 + (normalized_to_0_1 * (1 - 0.5))
+            # The original code had (1 - 0.5) which simplifies to 0.5.
+            # This normalizes to the range [0.5, 1.0] if normalized_to_0_1 is [0, 1].
+            dist = 0.5 + (normalized_to_0_1 * 0.5)
+
         return aux_df, dist
     return (df_and_dist,)
 
