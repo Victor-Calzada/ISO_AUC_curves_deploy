@@ -109,7 +109,7 @@ def _(
                                  showlegend=False))
     fig.update_layout(title=f"Cu-Ni [{pf}] -- AUC", xaxis_title="Cu", yaxis_title="Ni")
     fig.update_layout(xaxis=dict(range=[0,np.max(Cu2)]), yaxis=dict(range=[0,np.max(Ni2)]))
-    fig.update_layout(width=800, height=800)
+    fig.update_layout(width=900, height=900)
     mofig = mo.ui.plotly(fig)
     return (mofig,)
 
