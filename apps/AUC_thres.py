@@ -69,6 +69,7 @@ def _(df_plotter, go, indx, mo, umbralAUC):
     _fig = go.Figure()
     _fig.add_trace(go.Scatter(x=[umbralAUC[indx], umbralAUC[indx + 1]], y=[0,0], mode="markers+lines", marker=dict(size=20)))
     _fig.update_xaxes(showgrid=False, range=(df_plotter["AUC"].min() - 0.1, df_plotter["AUC"].max() + 0.1),)
+    _fig.update_xaxes(title_text="AUC")
     _fig.update_yaxes(showgrid=False, 
                      zeroline=True, zerolinecolor='black', zerolinewidth=3,
                      showticklabels=False)
