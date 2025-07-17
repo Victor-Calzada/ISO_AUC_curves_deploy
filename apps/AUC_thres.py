@@ -30,7 +30,7 @@ def _(mo, np, pl):
 @app.cell
 def _(mo):
 
-    slstep = mo.ui.slider(start=10, stop=200, step=20, show_value=True, label="AUC Step")
+    slstep = mo.ui.slider(start=10, stop=200, step=20, show_value=False, label="AUC Gap")
 
     return (slstep,)
 
@@ -41,7 +41,7 @@ def _(df_plotter, mo, np, slstep):
     umbralAUC = np.arange(df_plotter['AUC'].min(), df_plotter['AUC'].max()+step,step)
     tope = len(umbralAUC)-2
 
-    slindex = mo.ui.slider(start=0, stop=tope, step=1, show_value=True, label="AUC Threshold Index")
+    slindex = mo.ui.slider(start=0, stop=tope, step=1, show_value=False, label="AUC Gap Value")
     return slindex, umbralAUC
 
 
@@ -53,16 +53,28 @@ def _(mo):
 
 @app.cell
 def _(mo, slindex, slstep, switch):
-    mo.vstack([slstep,slindex, switch])
-    return
+    vstack_cntrols = mo.vstack([slstep,slindex, switch])
+    return (vstack_cntrols,)
 
 
 @app.cell
-def _(mo, slindex, umbralAUC):
+def _(slindex):
 
     indx = slindex.value
-    mo.md(f"""AUC umbral: {umbralAUC[indx]:.2f} - {umbralAUC[indx + 1]:.2f}""")
     return (indx,)
+
+
+@app.cell
+def _(df_plotter, go, indx, mo, umbralAUC):
+    _fig = go.Figure()
+    _fig.add_trace(go.Scatter(x=[umbralAUC[indx], umbralAUC[indx + 1]], y=[0,0], mode="markers+lines", marker=dict(size=20)))
+    _fig.update_xaxes(showgrid=False, range=(df_plotter["AUC"].min() - 0.1, df_plotter["AUC"].max() + 0.1),)
+    _fig.update_yaxes(showgrid=False, 
+                     zeroline=True, zerolinecolor='black', zerolinewidth=3,
+                     showticklabels=False)
+    _fig.update_layout(height=200, plot_bgcolor='white')
+    auc_fig = mo.ui.plotly(_fig)
+    return (auc_fig,)
 
 
 @app.cell
@@ -133,27 +145,19 @@ def _(
             borderwidth=2
         )
     )
-    mo.ui.plotly(fig)
-    return
+    mo_fig = mo.ui.plotly(fig)
+    return (mo_fig,)
 
 
 @app.cell
-def _():
-    return
+def _(auc_fig, mo, mo_fig):
+    figs_ui = mo.vstack([auc_fig, mo_fig],gap=0, align="center")
+    return (figs_ui,)
 
 
 @app.cell
-def _(df_plotter, indx, pl, umbralAUC):
-
-    _aux_df = df_plotter.filter((pl.col("AUC") > umbralAUC[indx]) & (pl.col("AUC") <= umbralAUC[indx + 1]))
-
-    sp = _aux_df.shape[0]
-    return (sp,)
-
-
-@app.cell
-def _(mo, sp):
-    mo.md(f"""Numero de datos: {sp}""")
+def _(figs_ui, mo, vstack_cntrols):
+    mo.hstack([vstack_cntrols, figs_ui], align="center", gap=0)
     return
 
 
