@@ -28,21 +28,34 @@ def _(mo, np, pl):
 
 
 @app.cell
-def _(mo):
+def _():
 
-    slstep = mo.ui.slider(start=10, stop=200, step=20, show_value=False, label="AUC Gap")
+    # slstep = mo.ui.slider(start=10, stop=200, step=20, show_value=False, label="AUC Gap")
 
-    return (slstep,)
+    return
 
 
 @app.cell
-def _(df_plotter, mo, np, slstep):
-    step = slstep.value
-    umbralAUC = np.arange(df_plotter['AUC'].min(), df_plotter['AUC'].max()+step,step)
-    tope = len(umbralAUC)-2
+def _():
+    # step = slstep.value
+    # umbralAUC = np.arange(df_plotter['AUC'].min(), df_plotter['AUC'].max()+step,step)
+    # tope = len(umbralAUC)-2
 
-    slindex = mo.ui.slider(start=0, stop=tope, step=1, show_value=False, label="AUC Gap Value")
-    return slindex, umbralAUC
+    # slindex = mo.ui.slider(start=0, stop=tope, step=1, show_value=False, label="AUC Gap Value")
+    return
+
+
+@app.cell
+def _(df_plotter, mo):
+    temprange_slider = mo.ui.range_slider(start=df_plotter["Temperature_Celsius"].min(), stop=df_plotter["Temperature_Celsius"].max(), step=1, show_value=False, label="Temperature Range (Celsius)", full_width=True)
+    return (temprange_slider,)
+
+
+@app.cell
+def _():
+
+    # indx = slindex.value
+    return
 
 
 @app.cell
@@ -52,38 +65,66 @@ def _(mo):
 
 
 @app.cell
-def _(mo, slindex, slstep, switch):
-    vstack_cntrols = mo.vstack([slstep,slindex, switch])
+def _(df_plotter, mo):
+    slAUC = mo.ui.slider(start=df_plotter["AUC"].min(), stop=df_plotter["AUC"].max(), step=0.1, show_value=False, label="AUC", full_width=True)
+    nuPerAUC = mo.ui.number(start=1, stop=25, step=1, value=15,label="+- % AUC")
+    return nuPerAUC, slAUC
+
+
+@app.cell
+def _(mo, nuPerAUC, slAUC, switch, temprange_slider):
+    vstack_cntrols = mo.vstack([slAUC, nuPerAUC, switch, temprange_slider])
     return (vstack_cntrols,)
 
 
 @app.cell
-def _(slindex):
-
-    indx = slindex.value
-    return (indx,)
+def _():
+    # auc_controls = mo.vstack([slAUC,nuPerAUC], gap=0)
+    # other_controsl = mo.hstack([switch, temprange_slider], gap=0)
+    return
 
 
 @app.cell
-def _(df_plotter, go, indx, mo, umbralAUC):
+def _(df_plotter, nuPerAUC, slAUC):
+    bottomAUC = slAUC.value-(slAUC.value*nuPerAUC.value/100) if slAUC.value-(slAUC.value*nuPerAUC.value/100)>df_plotter["AUC"].min() else df_plotter["AUC"].min()
+    topAUC = slAUC.value+(slAUC.value*nuPerAUC.value/100) if slAUC.value+(slAUC.value*nuPerAUC.value/100)<df_plotter["AUC"].max() else df_plotter["AUC"].max()
+    return bottomAUC, topAUC
+
+
+@app.cell
+def _(bottomAUC, df_plotter, go, mo, slAUC, topAUC):
     _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=[umbralAUC[indx], umbralAUC[indx + 1]], y=[0,0], mode="markers+lines", marker=dict(size=20)))
+    _fig.add_trace(go.Scatter(x=[bottomAUC, topAUC], y=[0,0], mode="markers+lines", marker=dict(size=20, symbol="line-ns", line=dict(width=5)), showlegend=False))
+    _fig.add_trace(go.Scatter(x=[slAUC.value], y=[0], mode="markers", marker=dict(size=10, color="red"),showlegend=False))
     _fig.update_xaxes(showgrid=False, range=(df_plotter["AUC"].min() - 0.1, df_plotter["AUC"].max() + 0.1),)
     _fig.update_xaxes(title_text="AUC")
     _fig.update_yaxes(showgrid=False, 
                      zeroline=True, zerolinecolor='black', zerolinewidth=3,
                      showticklabels=False)
-    _fig.update_layout(height=200, plot_bgcolor='white')
+    _fig.update_layout(height=200,width=700, plot_bgcolor='white')
     auc_fig = mo.ui.plotly(_fig)
     return (auc_fig,)
 
 
 @app.cell
+def _():
+    # auc_controls_fig = mo.hstack([auc_controls, auc_fig], gap=0, widths="equal")
+    return
+
+
+@app.cell
+def _(auc_fig, mo, vstack_cntrols):
+    controls = mo.hstack([vstack_cntrols, auc_fig],  gap=0, widths="equal")
+    # controls = mo.vstack([auc_controls_fig, other_controsl], gap=0)
+    return (controls,)
+
+
+@app.cell
 def _(
     TTS_eval,
+    bottomAUC,
     df_plotter,
     go,
-    indx,
     make_subplots,
     mo,
     np,
@@ -94,12 +135,15 @@ def _(
     rangey_fig1,
     rangey_fig2,
     switch,
-    umbralAUC,
+    temprange_slider,
+    topAUC,
 ):
-    _aux_df_b = df_plotter.filter((pl.col("AUC") > umbralAUC[indx]) & (pl.col("AUC") <= umbralAUC[indx + 1]))
+    _aux_df_b = df_plotter.filter((pl.col("AUC") > bottomAUC) & (pl.col("AUC") <= topAUC))
 
-    _aux_df_max = _aux_df_b.filter(pl.col("AUC") == pl.col("AUC").max())
-    _aux_df_min = _aux_df_b.filter(pl.col("AUC") == pl.col("AUC").min())
+    _aux_df_to_ASTM = _aux_df_b.filter((pl.col("Temperature_Celsius") >= temprange_slider.value[0]) & (pl.col("Temperature_Celsius") <= temprange_slider.value[1]))
+
+    _aux_df_max = _aux_df_to_ASTM.filter(pl.col("AUC") == pl.col("AUC").max())
+    _aux_df_min = _aux_df_to_ASTM.filter(pl.col("AUC") == pl.col("AUC").min())
 
 
 
@@ -109,16 +153,28 @@ def _(
         _aux_df = _aux_df_b.filter(pl.col("Product_Form") == _p)
         fig.add_trace(go.Scatter(x=_aux_df["Cu"], y=_aux_df["Ni"], 
                                  mode='markers', 
-                                 marker=dict(symbol=col_shape[_p]["shape"], color=col_shape[_p]["color"],line=dict(width=0.5, color="DarkSlateGrey")), 
-                                 name=f"{_p}", legendgroup=f"{_p}"),row=1, col=1)
+                                 marker=dict(symbol=col_shape[_p]["shape"], color = "grey",#color=col_shape[_p]["color"],
+                                             line=dict(width=0.5, color="DarkSlateGrey")), 
+                                 name=f"{_p}", legendgroup=f"{_p}", showlegend=False, opacity=0.7, hoverinfo="none"),row=1, col=1)
         fig.add_trace(go.Scatter(x=_aux_df["Fluence_1E19_n_cm2"], y=_aux_df["DT41J_Celsius"], 
                                  mode='markers', 
                                  marker=dict(symbol=col_shape[_p]["shape"], 
-                                             color=_aux_df["Cu"], colorscale='Sunsetdark', showscale=True, 
+                                             color="grey",line=dict(width=0.5, color="DarkSlateGrey")), name=f"{_p}",legendgroup=f"{_p}", showlegend=False, opacity=0.7, hoverinfo="none"), row=1, col=2)
+        _aux_df_temp = _aux_df.filter((pl.col("Temperature_Celsius") >= temprange_slider.value[0]) & (pl.col("Temperature_Celsius") <= temprange_slider.value[1]))
+        if _aux_df_temp.shape[0] != 0:
+            fig.add_trace(go.Scatter(x=_aux_df_temp["Cu"], y=_aux_df_temp["Ni"], 
+                                 mode='markers', 
+                                 marker=dict(symbol=col_shape[_p]["shape"], color=col_shape[_p]["color"],
+                                             line=dict(width=0.5, color="DarkSlateGrey")), 
+                                 name=f"{_p}", legendgroup=f"{_p}"),row=1, col=1)
+            fig.add_trace(go.Scatter(x=_aux_df_temp["Fluence_1E19_n_cm2"], y=_aux_df_temp["DT41J_Celsius"], 
+                                 mode='markers', 
+                                 marker=dict(symbol=col_shape[_p]["shape"], 
+                                             color=_aux_df_temp["Cu"], colorscale='Sunsetdark', showscale=True, 
                                              cmin = rangex_fig1[0], cmax = rangex_fig1[1],
                                              line=dict(width=0.5, color="DarkSlateGrey")), 
                                  name=f"{_p}",legendgroup=f"{_p}", showlegend=False), row=1, col=2)
-    if _aux_df_max.shape[0] !=0 and switch.value:
+    if _aux_df_max.shape[0] !=0 and _aux_df_min.shape[0] !=0 and switch.value:
         _Fl = np.linspace(1e22, 5*1e24, 500)
         tts_max = TTS_eval(pf=_aux_df_max["Product_Form"].to_numpy()[0],cu=_aux_df_max["Cu"].to_numpy()[0], ni=_aux_df_max["Ni"].to_numpy()[0], mn=_aux_df_max["Mn"].to_numpy()[0], p=_aux_df_max["P"].to_numpy()[0], t=_aux_df_max["Temperature_Celsius"].to_numpy()[0], fl=_Fl)
 
@@ -129,7 +185,7 @@ def _(
     fig.update_yaxes(title_text="Ni", row=1, col=1, range=rangey_fig1)
     fig.update_xaxes(title_text="Fluence (1E19 n/cm2)", row=1, col=2, range=rangex_fig2)
     fig.update_yaxes(title_text="DT41J (Celsius)", row=1, col=2, range=rangey_fig2)
-    fig.update_layout(width=1200, height=600)
+    fig.update_layout(width=1100, height=550)
     fig.update_layout(
         legend=dict(
             x=0,
@@ -151,20 +207,14 @@ def _(
 
 
 @app.cell
-def _(auc_fig, mo, mo_fig):
-    figs_ui = mo.vstack([auc_fig, mo_fig],gap=0, align="center")
+def _(controls, mo, mo_fig):
+    figs_ui = mo.vstack([controls, mo_fig],gap=0, heights=[1,5], justify="start")
     return (figs_ui,)
 
 
 @app.cell
-def _(figs_ui, mo, vstack_cntrols):
-    mo.hstack([vstack_cntrols, figs_ui], align="center", gap=0)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""----------""")
+def _(figs_ui):
+    figs_ui
     return
 
 
