@@ -172,6 +172,7 @@ def _(
                                  marker=dict(symbol=col_shape[_p]["shape"], 
                                              color=_aux_df_temp["Cu"], colorscale='Sunsetdark', showscale=True, 
                                              cmin = rangex_fig1[0], cmax = rangex_fig1[1],
+                                             colorbar=dict(title="Cu"),
                                              line=dict(width=0.5, color="DarkSlateGrey")), 
                                  name=f"{_p}",legendgroup=f"{_p}", showlegend=False), row=1, col=2)
     if _aux_df_max.shape[0] !=0 and _aux_df_min.shape[0] !=0 and switch.value:
@@ -185,7 +186,7 @@ def _(
     fig.update_yaxes(title_text="Ni", row=1, col=1, range=rangey_fig1)
     fig.update_xaxes(title_text="Fluence (1E19 n/cm2)", row=1, col=2, range=rangex_fig2)
     fig.update_yaxes(title_text="DT41J (Celsius)", row=1, col=2, range=rangey_fig2)
-    fig.update_layout(width=1100, height=550)
+    fig.update_layout(width=1200, height=650)
     fig.update_layout(
         legend=dict(
             x=0,
