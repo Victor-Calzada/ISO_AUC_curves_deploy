@@ -21,7 +21,7 @@ def _(mo, np, pl):
     # # Polars provides direct min() and max() methods on Series.
     rangex_fig1 = [df_plotter["Cu"].min() - 0.025, df_plotter["Cu"].max() + 0.025]
     rangey_fig1 = [df_plotter["Ni"].min() - 0.075, df_plotter["Ni"].max() + 0.075]
-    rangex_fig2 = [df_plotter["Fluence_1E19_n_cm2"].min() - 1, df_plotter["Fluence_1E19_n_cm2"].max() + 1]
+    rangex_fig2 = [df_plotter["Fluence_1E19_n_cm2"].min() - 1, df_plotter["Fluence_1E19_n_cm2"].max() + 1]* 1e-23
     rangey_fig2 = [df_plotter["DT41J_Celsius"].min() - 10, df_plotter["DT41J_Celsius"].max() + 10]
 
     return df_plotter, pf, rangex_fig1, rangex_fig2, rangey_fig1, rangey_fig2
@@ -47,7 +47,7 @@ def _():
 
 @app.cell
 def _(df_plotter, mo):
-    temprange_slider = mo.ui.range_slider(start=df_plotter["Temperature_Celsius"].min(), stop=df_plotter["Temperature_Celsius"].max(), step=1, show_value=False, label="Temperature Range (Celsius)", full_width=True)
+    temprange_slider = mo.ui.range_slider(start=df_plotter["Temperature_Celsius"].min(), stop=df_plotter["Temperature_Celsius"].max(), step=1, show_value=False, label="Irradiation Temperature Range (ºC)", full_width=True)
     return (temprange_slider,)
 
 
@@ -61,7 +61,8 @@ def _():
 @app.cell
 def _(mo):
     switch = mo.ui.switch(label="ASTM curves", value=False)
-    return (switch,)
+    switch_log = mo.ui.switch(label="Log plot", value=False)
+    return switch, switch_log
 
 
 @app.cell
@@ -72,8 +73,8 @@ def _(df_plotter, mo):
 
 
 @app.cell
-def _(mo, nuPerAUC, slAUC, switch, temprange_slider):
-    vstack_cntrols = mo.vstack([slAUC, nuPerAUC, switch, temprange_slider])
+def _(mo, nuPerAUC, slAUC, switch, switch_log, temprange_slider):
+    vstack_cntrols = mo.vstack([slAUC, nuPerAUC, mo.hstack([switch, switch_log]), temprange_slider])
     return (vstack_cntrols,)
 
 
@@ -122,6 +123,7 @@ def _(auc_fig, mo, vstack_cntrols):
 @app.cell
 def _(
     TTS_eval,
+    TTS_eval_sd,
     bottomAUC,
     df_plotter,
     go,
@@ -135,6 +137,7 @@ def _(
     rangey_fig1,
     rangey_fig2,
     switch,
+    switch_log,
     temprange_slider,
     topAUC,
 ):
@@ -159,7 +162,9 @@ def _(
         fig.add_trace(go.Scatter(x=_aux_df["Fluence_1E19_n_cm2"], y=_aux_df["DT41J_Celsius"], 
                                  mode='markers', 
                                  marker=dict(symbol=col_shape[_p]["shape"], 
-                                             color="grey",line=dict(width=0.5, color="DarkSlateGrey")), name=f"{_p}",legendgroup=f"{_p}", showlegend=False, opacity=0.7, hoverinfo="none"), row=1, col=2)
+                                             color="grey",line=dict(width=0.5, color="DarkSlateGrey"),colorscale='Sunsetdark', showscale=True, 
+                                             cmin = rangex_fig1[0], cmax = rangex_fig1[1],
+                                             colorbar=dict(title="Cu"),), name=f"{_p}",legendgroup=f"{_p}", showlegend=False, opacity=0.7, hoverinfo="none"), row=1, col=2)
         _aux_df_temp = _aux_df.filter((pl.col("Temperature_Celsius") >= temprange_slider.value[0]) & (pl.col("Temperature_Celsius") <= temprange_slider.value[1]))
         if _aux_df_temp.shape[0] != 0:
             fig.add_trace(go.Scatter(x=_aux_df_temp["Cu"], y=_aux_df_temp["Ni"], 
@@ -170,7 +175,7 @@ def _(
             fig.add_trace(go.Scatter(x=_aux_df_temp["Fluence_1E19_n_cm2"], y=_aux_df_temp["DT41J_Celsius"], 
                                  mode='markers', 
                                  marker=dict(symbol=col_shape[_p]["shape"], 
-                                             color=_aux_df_temp["Cu"], colorscale='Sunsetdark', showscale=True, 
+                                             color=_aux_df_temp["Cu"], colorscale='Sunsetdark', showscale=False, 
                                              cmin = rangex_fig1[0], cmax = rangex_fig1[1],
                                              colorbar=dict(title="Cu"),
                                              line=dict(width=0.5, color="DarkSlateGrey")), 
@@ -178,13 +183,24 @@ def _(
     if _aux_df_max.shape[0] !=0 and _aux_df_min.shape[0] !=0 and switch.value:
         _Fl = np.linspace(1e22, 5*1e24, 500)
         tts_max = TTS_eval(pf=_aux_df_max["Product_Form"].to_numpy()[0],cu=_aux_df_max["Cu"].to_numpy()[0], ni=_aux_df_max["Ni"].to_numpy()[0], mn=_aux_df_max["Mn"].to_numpy()[0], p=_aux_df_max["P"].to_numpy()[0], t=_aux_df_max["Temperature_Celsius"].to_numpy()[0], fl=_Fl)
+        tts_max_sd = TTS_eval_sd(pf=_aux_df_max["Product_Form"].to_numpy()[0], TTS=tts_max)
 
         tts_min = TTS_eval(pf=_aux_df_min["Product_Form"].to_numpy()[0],cu=_aux_df_min["Cu"].to_numpy()[0], ni=_aux_df_min["Ni"].to_numpy()[0], mn=_aux_df_min["Mn"].to_numpy()[0], p=_aux_df_min["P"].to_numpy()[0], t=_aux_df_min["Temperature_Celsius"].to_numpy()[0], fl=_Fl)
-        fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max,line=dict(color="indigo"), fill="tonexty",showlegend=False), row=1, col=2)
+        tts_min_sd = TTS_eval_sd(pf=_aux_df_min["Product_Form"].to_numpy()[0], TTS=tts_min)
+        fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max+tts_max_sd, line=dict(color="grey", dash="dash"), showlegend=False), row=1, col=2)
+        fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_min-tts_min_sd, line=dict(color="grey", dash="dash"),fill="tonexty", showlegend=False), row=1, col=2)
+        fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max,line=dict(color="indigo"),showlegend=False), row=1, col=2)
+    
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_min, line=dict(color="indigo"),fill="tonexty",showlegend=False), row=1, col=2)
+    
     fig.update_xaxes(title_text="Cu", row=1, col=1, range=rangex_fig1)
     fig.update_yaxes(title_text="Ni", row=1, col=1, range=rangey_fig1)
-    fig.update_xaxes(title_text="Fluence (1E19 n/cm2)", row=1, col=2, range=rangex_fig2)
+    if switch_log.value:
+        fig.update_xaxes(type="log", row=1, col=2)
+        fig.update_xaxes(title_text="log Fluence (1E19 n/cm2)", row=1, col=2)
+    else:
+        fig.update_xaxes(type="linear", row=1, col=2)
+        fig.update_xaxes(title_text="Fluence (1E19 n/cm2)", row=1, col=2, range=rangex_fig2)
     fig.update_yaxes(title_text="DT41J (Celsius)", row=1, col=2, range=rangey_fig2)
     fig.update_layout(width=1200, height=650)
     fig.update_layout(
@@ -266,7 +282,20 @@ def _(np):
         TTS2 = 5/9*M*maximo((minimo(cu,0.28)-0.053),0)
 
         return TTS1+TTS2
-    return (TTS_eval,)
+
+    def TTS_eval_sd(pf, TTS):
+        if pf == "F":
+            C=6.972
+            D=0.199
+        elif (pf == 'P') or (pf == 'SRM'):
+            C=6.593
+            D=0.163
+        elif pf == 'W':
+            C=7.681
+            D=0.181
+
+        return C * TTS**D
+    return TTS_eval, TTS_eval_sd
 
 
 if __name__ == "__main__":
