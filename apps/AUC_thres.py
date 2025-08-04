@@ -21,7 +21,7 @@ def _(mo, np, pl):
     # # Polars provides direct min() and max() methods on Series.
     rangex_fig1 = [df_plotter["Cu"].min() - 0.025, df_plotter["Cu"].max() + 0.025]
     rangey_fig1 = [df_plotter["Ni"].min() - 0.075, df_plotter["Ni"].max() + 0.075]
-    rangex_fig2 = [df_plotter["Fluence_1E19_n_cm2"].min() - 1, df_plotter["Fluence_1E19_n_cm2"].max() + 1]* 1e-23
+    rangex_fig2 = [df_plotter["Fluence_1E19_n_cm2"].min() - 1, df_plotter["Fluence_1E19_n_cm2"].max() + 1]
     rangey_fig2 = [df_plotter["DT41J_Celsius"].min() - 10, df_plotter["DT41J_Celsius"].max() + 10]
 
     return df_plotter, pf, rangex_fig1, rangex_fig2, rangey_fig1, rangey_fig2
@@ -190,9 +190,9 @@ def _(
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max+tts_max_sd, line=dict(color="grey", dash="dash"), showlegend=False), row=1, col=2)
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_min-tts_min_sd, line=dict(color="grey", dash="dash"),fill="tonexty", showlegend=False), row=1, col=2)
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max,line=dict(color="indigo"),showlegend=False), row=1, col=2)
-    
+
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_min, line=dict(color="indigo"),fill="tonexty",showlegend=False), row=1, col=2)
-    
+
     fig.update_xaxes(title_text="Cu", row=1, col=1, range=rangex_fig1)
     fig.update_yaxes(title_text="Ni", row=1, col=1, range=rangey_fig1)
     if switch_log.value:
