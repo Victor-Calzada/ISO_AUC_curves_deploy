@@ -23,8 +23,16 @@ def _(mo, np, pl):
     rangey_fig1 = [df_plotter["Ni"].min() - 0.075, df_plotter["Ni"].max() + 0.075]
     rangex_fig2 = [df_plotter["Fluence_1E19_n_cm2"].min() - 1, df_plotter["Fluence_1E19_n_cm2"].max() + 1]
     rangey_fig2 = [df_plotter["DT41J_Celsius"].min() - 10, df_plotter["DT41J_Celsius"].max() + 10]
-
-    return df_plotter, pf, rangex_fig1, rangex_fig2, rangey_fig1, rangey_fig2
+    rangex_fig2_log = [np.log10(df_plotter["Fluence_1E19_n_cm2"].min()), np.log10(df_plotter["Fluence_1E19_n_cm2"].max()+1)]
+    return (
+        df_plotter,
+        pf,
+        rangex_fig1,
+        rangex_fig2,
+        rangex_fig2_log,
+        rangey_fig1,
+        rangey_fig2,
+    )
 
 
 @app.cell
@@ -114,8 +122,8 @@ def _():
 
 
 @app.cell
-def _(auc_fig, mo, vstack_cntrols):
-    controls = mo.hstack([vstack_cntrols, auc_fig],  gap=0, widths="equal")
+def _(auc_fig, mo, mo_md_num_vals, vstack_cntrols):
+    controls = mo.hstack([vstack_cntrols, mo.vstack([auc_fig, mo_md_num_vals], gap=0, align="start")],  gap=0, widths="equal")
     # controls = mo.vstack([auc_controls_fig, other_controsl], gap=0)
     return (controls,)
 
@@ -134,6 +142,7 @@ def _(
     pl,
     rangex_fig1,
     rangex_fig2,
+    rangex_fig2_log,
     rangey_fig1,
     rangey_fig2,
     switch,
@@ -152,6 +161,8 @@ def _(
 
     col_shape = {"W":{"color":'#1f77b4', "shape":"circle"}, "P":{"color":'#1f77b4', "shape":"square"}, "F":{"color":'#1f77b4', "shape":"cross"}}
     fig = make_subplots(rows=1, cols=2)
+    _total_num = 0
+    _total_num_temp = 0
     for _p in pf:
         _aux_df = _aux_df_b.filter(pl.col("Product_Form") == _p)
         fig.add_trace(go.Scatter(x=_aux_df["Cu"], y=_aux_df["Ni"], 
@@ -166,6 +177,7 @@ def _(
                                              cmin = rangex_fig1[0], cmax = rangex_fig1[1],
                                              colorbar=dict(title="Cu"),), name=f"{_p}",legendgroup=f"{_p}", showlegend=False, opacity=0.7, hoverinfo="none"), row=1, col=2)
         _aux_df_temp = _aux_df.filter((pl.col("Temperature_Celsius") >= temprange_slider.value[0]) & (pl.col("Temperature_Celsius") <= temprange_slider.value[1]))
+        _total_num += _aux_df.shape[0]
         if _aux_df_temp.shape[0] != 0:
             fig.add_trace(go.Scatter(x=_aux_df_temp["Cu"], y=_aux_df_temp["Ni"], 
                                  mode='markers', 
@@ -180,8 +192,9 @@ def _(
                                              colorbar=dict(title="Cu"),
                                              line=dict(width=0.5, color="DarkSlateGrey")), 
                                  name=f"{_p}",legendgroup=f"{_p}", showlegend=False), row=1, col=2)
+            _total_num_temp += _aux_df_temp.shape[0]
     if _aux_df_max.shape[0] !=0 and _aux_df_min.shape[0] !=0 and switch.value:
-        _Fl = np.linspace(1e22, 5*1e24, 500)
+        _Fl = np.linspace(1e20, 5*1e24, 500)
         tts_max = TTS_eval(pf=_aux_df_max["Product_Form"].to_numpy()[0],cu=_aux_df_max["Cu"].to_numpy()[0], ni=_aux_df_max["Ni"].to_numpy()[0], mn=_aux_df_max["Mn"].to_numpy()[0], p=_aux_df_max["P"].to_numpy()[0], t=_aux_df_max["Temperature_Celsius"].to_numpy()[0], fl=_Fl)
         tts_max_sd = TTS_eval_sd(pf=_aux_df_max["Product_Form"].to_numpy()[0], TTS=tts_max)
 
@@ -192,12 +205,12 @@ def _(
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max,line=dict(color="indigo"),showlegend=False), row=1, col=2)
 
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_min, line=dict(color="indigo"),fill="tonexty",showlegend=False), row=1, col=2)
-
+    
     fig.update_xaxes(title_text="Cu", row=1, col=1, range=rangex_fig1)
     fig.update_yaxes(title_text="Ni", row=1, col=1, range=rangey_fig1)
     if switch_log.value:
         fig.update_xaxes(type="log", row=1, col=2)
-        fig.update_xaxes(title_text="log Fluence (1E19 n/cm2)", row=1, col=2)
+        fig.update_xaxes(title_text="log Fluence (1E19 n/cm2)", row=1, col=2, range=rangex_fig2_log)
     else:
         fig.update_xaxes(type="linear", row=1, col=2)
         fig.update_xaxes(title_text="Fluence (1E19 n/cm2)", row=1, col=2, range=rangex_fig2)
@@ -219,8 +232,9 @@ def _(
             borderwidth=2
         )
     )
+    mo_md_num_vals = mo.md(f"Total number of data points: {_total_num} (filtered by temp: {_total_num_temp})")
     mo_fig = mo.ui.plotly(fig)
-    return (mo_fig,)
+    return mo_fig, mo_md_num_vals
 
 
 @app.cell
