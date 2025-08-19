@@ -205,7 +205,7 @@ def _(
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_max,line=dict(color="indigo"),showlegend=False), row=1, col=2)
 
         fig.add_trace(go.Scatter(x=_Fl*1e-23, y=tts_min, line=dict(color="indigo"),fill="tonexty",showlegend=False), row=1, col=2)
-    
+
     fig.update_xaxes(title_text="Cu", row=1, col=1, range=rangex_fig1)
     fig.update_yaxes(title_text="Ni", row=1, col=1, range=rangey_fig1)
     if switch_log.value:
