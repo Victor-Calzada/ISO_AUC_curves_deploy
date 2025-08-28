@@ -19,10 +19,25 @@ def _(mo, pl):
      "DT41J_Celsius":[19.555556, 25.333333, 68.333333]})
 
 
+    rangex_Cu = [df_plotter_big["Cu"].min() - 0.025, df_plotter_big["Cu"].max() + 0.025]
+    rangey_Ni = [df_plotter_big["Ni"].min() - 0.075, df_plotter_big["Ni"].max() + 0.075]
 
+    rangex_Fl = [df_plotter_big["Fluence_1E19_n_cm2"].min() - 1, df_plotter_big["Fluence_1E19_n_cm2"].max() + 1]
+    rangey_41j = [df_plotter_big["DT41J_Celsius"].min() - 10, df_plotter_big["DT41J_Celsius"].max() + 10]
     cols = ["Fluence_1E19_n_cm2"]
     objective= "DT41J_Celsius"
-    return d_c_prov, df_plotter_auc_big, df_plotter_big
+
+    MAX_K=800
+    return (
+        MAX_K,
+        d_c_prov,
+        df_plotter_auc_big,
+        df_plotter_big,
+        rangex_Cu,
+        rangex_Fl,
+        rangey_41j,
+        rangey_Ni,
+    )
 
 
 @app.cell
@@ -87,14 +102,28 @@ def _():
 
 
 @app.cell
-def _(mo):
-    k_n = mo.ui.number(start=1, stop=50, label="K travelers")
+def _(MAX_K, mo):
+
+    max_k_val = mo.ui.number(start=50, stop=MAX_K,step=5, value=400,label="Max K travellers")
+    return (max_k_val,)
+
+
+@app.cell
+def _(max_k_val):
+    K_SELECT=max_k_val.value
+    return (K_SELECT,)
+
+
+@app.cell
+def _(K_SELECT, mo):
+    k_n = mo.ui.number(start=1, stop=K_SELECT, label="K travellers")
     return (k_n,)
 
 
 @app.cell
-def _(k_n):
-    k_n
+def _(k_n, max_k_val, mo):
+    mo.hstack([k_n, max_k_val], gap=5, justify="start")
+
     return
 
 
@@ -319,6 +348,7 @@ def _(TTS_eval, np, pl, simpson):
 
 @app.cell
 def _(
+    K_SELECT,
     calculate_AUC_astm,
     curve_fit,
     func,
@@ -339,7 +369,7 @@ def _(
             bounds = ([-np.inf, -np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf, np.inf])
         else:
             bounds = bounds
-        for k in range(1, 51):
+        for k in range(1, K_SELECT+1):
             aux_df_k = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
             si_aux = aux_df_k.shape
             X_k = aux_df_k[cols].to_numpy()
@@ -365,9 +395,48 @@ def _(
 def _(func, np):
     def pred_from_fit(coef, k, func=func):
         popt, pcov = coef[k-1]
-        x = np.linspace(0.01, 10, 200)
+        x = np.linspace(0.01, 12, 200)
         return func(x, *popt), x
     return (pred_from_fit,)
+
+
+@app.cell
+def _(
+    calculate_AUC_astm,
+    get_k_nearest_auc_neighbors_from_auc,
+    pl,
+    select_mat_temp_conf,
+):
+    def select_anomaly(df, df_plotter, df_plotter_auc, k):
+        auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
+        near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
+        df = df.with_columns(pl.lit(1).alias("Family"))
+        near_main_df = near_main_df.with_columns(pl.lit(0).alias("Family"))
+        aux_concat_df = pl.concat([df, near_main_df])
+        return aux_concat_df
+    # select_anomaly(d_c, df_plotter, df_plotter_auc, k_n.value)
+    return
+
+
+@app.cell
+def _(
+    calculate_AUC_astm,
+    func,
+    get_k_nearest_auc_neighbors_from_auc,
+    np,
+    pl,
+    select_mat_temp_conf,
+):
+    from delta_method import delta_method
+    def test_delta_func(df, df_plotter, df_plotter_auc, k, coef, func=func):
+        popt, pcov = coef[k-1]
+        auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
+        near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
+        aux_concat_df = pl.concat([df, near_main_df])
+        y, x = aux_concat_df["DT41J_Celsius"].to_numpy(),  aux_concat_df["Fluence_1E19_n_cm2"].to_numpy()
+        x_new = np.linspace(0.01, 10, 200)
+        return delta_method(popt=popt, pcov=pcov, x_new=x_new, x=x, y=y, f=func, alpha=0.05)
+    return
 
 
 @app.cell
@@ -381,16 +450,20 @@ def _(
     np,
     pl,
     pred_from_fit,
+    rangex_Fl,
+    rangey_41j,
     select_mat_temp_conf,
 ):
     def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, func = func, jac_func = jac_func):
         fig = go.Figure()
+        obs = np.nan
         if ~np.isnan(loss_k[k-1]):
             popt, pcov = coef[k-1]
             y_new_fit, x_new = pred_from_fit(coef, k, func)
             auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
             near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
             aux_concat_df = pl.concat([df, near_main_df])
+            obs = aux_concat_df.shape[0]
             y, x = aux_concat_df["DT41J_Celsius"].to_numpy(),  aux_concat_df["Fluence_1E19_n_cm2"].to_numpy()
             y_fit, lower_conf, upper_conf, lower_pred, upper_pred = calcular_bandas_de_ajuste_new(func, x_data=x, y_data=y, popt=popt, pcov=pcov, jac_func=jac_func)
             indx = np.argsort(x_new)
@@ -411,8 +484,9 @@ def _(
         fig.update_layout(width=800, height=700)
         fig.add_annotation(text=f"RMSE = {loss_k[k-1]:.2f} ºC", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.95)
         fig.add_annotation(text=f"K = {k}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.90)
-        fig.update_xaxes(title="Fluence_1E19_n_cm2", range=[-1,10])
-        fig.update_yaxes(title="DT41J_Celsius", range=[-40, 145])
+        fig.add_annotation(text=f"#Obs = {obs}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.85)
+        fig.update_xaxes(title="Fluence_1E19_n_cm2", range=rangex_Fl)
+        fig.update_yaxes(title="DT41J_Celsius", range=rangey_41j)
         return fig
     return (plt_conf_k,)
 
@@ -489,7 +563,7 @@ def _(np, t):
             tuple: Una tupla con (y_fit, lower_conf, upper_conf, lower_pred, upper_pred).
         """
         n = 200
-        x_fit = np.linspace(0.01, 10, n)
+        x_fit = np.linspace(0.01, 12, n)
 
         p = len(popt)
         dof = max(0, n - p)
@@ -574,9 +648,9 @@ def _(np, t):
 @app.cell
 def _(go, np):
     def loss_k_plot(loss_k, k):
-        ks = list(range(1,51))
+        ks = list(range(1,len(loss_k)+1))
         _fig = go.Figure()
-        _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines", showlegend=False))
+        _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines+markers",marker=dict(size=2.5), showlegend=False))
         if ~np.isnan(loss_k[k-1]):
 
             _fig.add_trace(go.Scatter(x=[k], y=[loss_k[k-1]], mode="markers", marker=dict(color="red", size=7), name="Selected K", showlegend=False))
@@ -592,6 +666,8 @@ def _(
     calculate_AUC_astm,
     get_k_nearest_auc_neighbors_from_auc,
     go,
+    rangex_Cu,
+    rangey_Ni,
     select_mat_temp_conf,
 ):
     def plot_cu_ni(df, df_plotter, df_plotter_auc, k):
@@ -601,8 +677,8 @@ def _(
         _fig.add_trace(go.Scatter(x=df["Cu"], y=df["Ni"], mode="markers", marker=dict(size=10, color= "#C72020", line=dict(color="#651010", width=1)), name="Family"))
         _fig.add_trace(go.Scatter(x=near_main_df["Cu"], y=near_main_df["Ni"], mode="markers",marker=dict(color="#C77320",line=dict(color="#8C5217", width=1)), name="Travelers"))
         _fig.update_layout(width=600,height=600)
-        _fig.update_xaxes(title="Cu")
-        _fig.update_yaxes(title="Ni")
+        _fig.update_xaxes(title="Cu", range=rangex_Cu)
+        _fig.update_yaxes(title="Ni", range=rangey_Ni)
         return _fig
     return (plot_cu_ni,)
 
