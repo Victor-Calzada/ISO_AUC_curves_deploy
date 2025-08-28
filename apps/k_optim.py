@@ -104,7 +104,7 @@ def _():
 @app.cell
 def _(MAX_K, mo):
 
-    max_k_val = mo.ui.number(start=50, stop=MAX_K,step=5, value=400,label="Max K travellers")
+    max_k_val = mo.ui.number(start=50, stop=MAX_K,step=5, value=400,label="Max K traveler")
     return (max_k_val,)
 
 
@@ -116,13 +116,13 @@ def _(max_k_val):
 
 @app.cell
 def _(K_SELECT, mo):
-    k_n = mo.ui.number(start=1, stop=K_SELECT, label="K travellers")
+    k_n = mo.ui.number(start=1, stop=K_SELECT, label="K traveler")
     return (k_n,)
 
 
 @app.cell
-def _(k_n, max_k_val, mo):
-    mo.hstack([k_n, max_k_val], gap=5, justify="start")
+def _(dow_butt, k_n, max_k_val, mo):
+    mo.hstack([k_n, max_k_val, dow_butt], gap=5, justify="start")
 
     return
 
@@ -403,7 +403,12 @@ def _(func, np):
 @app.cell
 def _(
     calculate_AUC_astm,
+    d_c,
+    df_plotter,
+    df_plotter_auc,
     get_k_nearest_auc_neighbors_from_auc,
+    k_n,
+    mo,
     pl,
     select_mat_temp_conf,
 ):
@@ -414,8 +419,10 @@ def _(
         near_main_df = near_main_df.with_columns(pl.lit(0).alias("Family"))
         aux_concat_df = pl.concat([df, near_main_df])
         return aux_concat_df
-    # select_anomaly(d_c, df_plotter, df_plotter_auc, k_n.value)
-    return
+    download_df = select_anomaly(d_c, df_plotter, df_plotter_auc, k_n.value)
+    filename = f"fam_traveler_k{str(k_n.value)}.csv"
+    dow_butt = mo.download(data=download_df.write_csv(), filename=filename, label="Download fam/travelers as CSV") 
+    return (dow_butt,)
 
 
 @app.cell
