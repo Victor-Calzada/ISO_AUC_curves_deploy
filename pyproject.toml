@@ -6,7 +6,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "altair>=5.5.0",
+    "delta-method",
     "marimo>=0.14.11",
     "pandas>=2.3.1",
     "polars>=1.31.0",
 ]
+
+[tool.uv.sources]
+delta-method = { git = "https://github.com/gjpelletier/delta_method.git" }
