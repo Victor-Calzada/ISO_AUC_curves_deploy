@@ -58,11 +58,12 @@ def _(mo):
 
 
 @app.cell
-def _(drop_func, func_exp, func_log, jac_func_log, mo, np):
+def _(drop_func, func_exp, func_log, jac_func_exp, jac_func_log, mo, np):
+
     if drop_func.value == 0:
         func_md = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b(1-e^{c\cdot \phi})$")
         func = func_exp
-        jac_func = None
+        jac_func = jac_func_exp
         bounds = None
     else:
         func_md = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b\cdot log(\phi + 1)+c$")
@@ -133,6 +134,7 @@ def _(
     d_c,
     df_plotter,
     df_plotter_auc,
+    drop_func,
     func,
     k_explore,
     k_n,
@@ -140,9 +142,20 @@ def _(
     plt_conf_k,
 ):
     loss_k, coef = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
-    fig = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k)
+    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k)
     mo_fig = mo.ui.plotly(fig)
-    return loss_k, mo_fig
+    a, b, c, alpha = popt
+    if drop_func.value == 0:
+        md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
+    else:
+        md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
+    return loss_k, md_func, mo_fig
+
+
+@app.cell
+def _(md_func):
+    md_func
+    return
 
 
 @app.cell
@@ -194,8 +207,19 @@ def _(np):
     def func_exp(x, a, b, c, alpha):
         return (a*x**alpha)+(b*(1-np.exp(c*x)))
 
+    def jac_func_exp(x, a, b, c, alpha):
+        x = np.asarray(x)
+        ga = x ** alpha
+    
+        gb = 1 - np.exp(c*x)
+        gc = -b*x*np.exp(c*x)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ln_x = np.where(x > 0, np.log(x), 0.0)
+        galpha = a*(x**alpha)*ln_x
+        return np.vstack([ga, gb, gc, galpha]).T
+
     def func_log(x, a, b, c, alpha):
-        return (a*x**alpha)+(b+np.log(x))+c
+        return (a*x**alpha)+(b*np.log(x))+c
 
     def jac_func_log(x, a, b, c, alpha):
         """
@@ -207,7 +231,7 @@ def _(np):
         J[:, 0] = x**alpha
 
         # Derivada parcial con respecto a 'b'
-        J[:, 1] = 1.0
+        J[:, 1] = np.log(x + 1e-12) # Se añade 1e-12 para evitar log(0)
 
         # Derivada parcial con respecto a 'c'
         J[:, 2] = 1.0
@@ -218,16 +242,8 @@ def _(np):
 
         return J
 
-    def jacobian(x, popt, func, epsilon=1e-7):
-        jac = np.zeros((len(x), len(popt)))
-        for i in range(len(popt)):
-            p_plus = np.array(popt)
-            p_minus = np.array(popt)
-            p_plus[i] += epsilon
-            p_minus[i] -= epsilon
-            jac[:, i] = (func(x, *p_plus) - func(x, *p_minus)) / (2 * epsilon)
-        return jac
-    return func_exp, func_log, jac_func_log
+
+    return func_exp, func_log, jac_func_exp, jac_func_log
 
 
 @app.cell
@@ -397,7 +413,7 @@ def _(func, np):
         popt, pcov = coef[k-1]
         x = np.linspace(0.01, 12, 200)
         return func(x, *popt), x
-    return (pred_from_fit,)
+    return
 
 
 @app.cell
@@ -448,7 +464,7 @@ def _(
 
 @app.cell
 def _(
-    calcular_bandas_de_ajuste_new,
+    calcular_bandas_de_ajuste_diego,
     calculate_AUC_astm,
     func,
     get_k_nearest_auc_neighbors_from_auc,
@@ -456,23 +472,24 @@ def _(
     jac_func,
     np,
     pl,
-    pred_from_fit,
     rangex_Fl,
     rangey_41j,
     select_mat_temp_conf,
 ):
+
     def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, func = func, jac_func = jac_func):
         fig = go.Figure()
         obs = np.nan
+    
         if ~np.isnan(loss_k[k-1]):
             popt, pcov = coef[k-1]
-            y_new_fit, x_new = pred_from_fit(coef, k, func)
+            # y_new_fit, x_new = pred_from_fit(coef, k, func)
             auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
             near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
             aux_concat_df = pl.concat([df, near_main_df])
             obs = aux_concat_df.shape[0]
             y, x = aux_concat_df["DT41J_Celsius"].to_numpy(),  aux_concat_df["Fluence_1E19_n_cm2"].to_numpy()
-            y_fit, lower_conf, upper_conf, lower_pred, upper_pred = calcular_bandas_de_ajuste_new(func, x_data=x, y_data=y, popt=popt, pcov=pcov, jac_func=jac_func)
+            x_new,y_fit, lower_conf, upper_conf, lower_pred, upper_pred = calcular_bandas_de_ajuste_diego(func, x_data=x, y_data=y, popt=popt, pcov=pcov, jac_func=jac_func)
             indx = np.argsort(x_new)
 
 
@@ -494,7 +511,7 @@ def _(
         fig.add_annotation(text=f"#Obs = {obs}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.85)
         fig.update_xaxes(title="Fluence_1E19_n_cm2", range=rangex_Fl)
         fig.update_yaxes(title="DT41J_Celsius", range=rangey_41j)
-        return fig
+        return fig, popt
     return (plt_conf_k,)
 
 
@@ -607,7 +624,34 @@ def _(np, t):
         upper_pred = y_fit + t_crit * SE_pred
 
         return y_fit, lower_conf, upper_conf, lower_pred, upper_pred
-    return (calcular_bandas_de_ajuste_new,)
+    return
+
+
+@app.cell
+def _(np, t):
+    def calcular_bandas_de_ajuste_diego(func, x_data, y_data, popt, pcov, alpha_confidence=0.05, jac_func=None):
+        n = len(x_data); p = len(popt); dof = max(1, n - p)
+        y_hat = func(x_data, *popt)
+        resid = y_data - y_hat
+        s_sq = np.sum(resid**2) / dof
+    
+        xfit = np.linspace(np.min(x_data), 12, 500)
+        yfit = func(xfit, *popt)
+    
+        J = jac_func(xfit, *popt)  
+    
+        var_mean = np.einsum("ij,jk,ik->i", J, pcov, J)  # diag(J Cov J^T)
+    
+        se_mean = np.sqrt(var_mean)
+    
+        tcrit = t.ppf(1 - alpha_confidence/2, dof)
+        ci_lo = yfit - tcrit * se_mean
+        ci_hi = yfit + tcrit * se_mean
+        se_pred = np.sqrt(var_mean + s_sq)
+        pi_lo = yfit - tcrit * se_pred
+        pi_hi = yfit + tcrit * se_pred
+        return xfit,yfit,ci_lo, ci_hi,pi_lo,pi_hi
+    return (calcular_bandas_de_ajuste_diego,)
 
 
 @app.cell
