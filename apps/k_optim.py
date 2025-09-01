@@ -58,19 +58,19 @@ def _(mo):
 
 
 @app.cell
-def _(drop_func, func_exp, func_log, jac_func_exp, jac_func_log, mo, np):
+def _(drop_func, func_exp, func_log, jac_func_exp, jac_func_log, np):
 
     if drop_func.value == 0:
-        func_md = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b(1-e^{c\cdot \phi})$")
+
         func = func_exp
         jac_func = jac_func_exp
         bounds = None
     else:
-        func_md = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b\cdot log(\phi + 1)+c$")
+
         func = func_log
         jac_func = jac_func_log
         bounds = ([-np.inf, -np.inf, -np.inf, 0], [np.inf, np.inf, np.inf, 1])
-    func_md
+
     return bounds, func, jac_func
 
 
@@ -129,36 +129,6 @@ def _(dow_butt, k_n, max_k_val, mo):
 
 
 @app.cell
-def _(
-    bounds,
-    d_c,
-    df_plotter,
-    df_plotter_auc,
-    drop_func,
-    func,
-    k_explore,
-    k_n,
-    mo,
-    plt_conf_k,
-):
-    loss_k, coef = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
-    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k)
-    mo_fig = mo.ui.plotly(fig)
-    a, b, c, alpha = popt
-    if drop_func.value == 0:
-        md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
-    else:
-        md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
-    return loss_k, md_func, mo_fig
-
-
-@app.cell
-def _(md_func):
-    md_func
-    return
-
-
-@app.cell
 def _(k_n, loss_k, loss_k_plot, mo):
     _fig_k = loss_k_plot(loss_k, k_n.value)
     mo_fig_k = mo.ui.plotly(_fig_k)
@@ -166,10 +136,50 @@ def _(k_n, loss_k, loss_k_plot, mo):
 
 
 @app.cell
-def _(d_c, df_plotter, df_plotter_auc, k_n, mo, plot_cu_ni):
-    _fig = plot_cu_ni(d_c, df_plotter, df_plotter_auc, k_n.value)
+def _(d_c, df_plotter, df_plotter_auc, k_n, mo, plot_cu_ni_new):
+    # _fig = plot_cu_ni_altair(d_c, df_plotter, df_plotter_auc, k_n.value, rangex_Cu, rangey_Ni)
+    # fig_cu_ni = mo.ui.altair_chart(_fig)
+    _fig = plot_cu_ni_new(d_c, df_plotter, df_plotter_auc, k_n.value)
     fig_cu_ni = mo.ui.plotly(_fig)
     return (fig_cu_ni,)
+
+
+@app.cell
+def _(
+    bounds,
+    d_c,
+    df_plotter,
+    df_plotter_auc,
+    drop_func,
+    fig_cu_ni,
+    func,
+    k_explore,
+    k_n,
+    mo,
+    np,
+    plt_conf_k,
+):
+    loss_k, coef = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
+    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, paths=fig_cu_ni.value)
+    mo_fig = mo.ui.plotly(fig)
+    a, b, c, alpha = popt
+    if np.isnan(a):
+        if drop_func.value == 0:
+            md_func = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b(1-e^{c\cdot \phi})$")
+        else:
+            md_func = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b\cdot log(\phi + 1)+c$")
+    else:
+        if drop_func.value == 0:
+            md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
+        else:
+            md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
+    return loss_k, md_func, mo_fig
+
+
+@app.cell
+def _(md_func):
+    md_func
+    return
 
 
 @app.cell
@@ -210,7 +220,7 @@ def _(np):
     def jac_func_exp(x, a, b, c, alpha):
         x = np.asarray(x)
         ga = x ** alpha
-    
+
         gb = 1 - np.exp(c*x)
         gc = -b*x*np.exp(c*x)
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -477,10 +487,10 @@ def _(
     select_mat_temp_conf,
 ):
 
-    def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, func = func, jac_func = jac_func):
+    def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, func = func, jac_func = jac_func, paths = None):
         fig = go.Figure()
         obs = np.nan
-    
+        popt = np.nan,np.nan,np.nan,np.nan
         if ~np.isnan(loss_k[k-1]):
             popt, pcov = coef[k-1]
             # y_new_fit, x_new = pred_from_fit(coef, k, func)
@@ -505,6 +515,25 @@ def _(
             fig.add_trace(go.Scatter(x=near_main_df["Fluence_1E19_n_cm2"], y=near_main_df["DT41J_Celsius"], mode="markers",marker=dict(color="#C77320",line=dict(color="#8C5217", width=1)), name="Travelers"))
             fig.add_trace(go.Scatter(x=df["Fluence_1E19_n_cm2"], y=df["DT41J_Celsius"], mode="markers", marker=dict(size=10, color= "#C72020", line=dict(color="#651010", width=1)), name="Family"))
 
+            if (paths is not None) and (len(paths)>0):
+                o = 1
+                for path in paths:
+                    if path["Family"]:
+                        continue
+                    else:
+                        s_df = pl.DataFrame(path)
+                        columns_to_cast = ["Cu",  "Ni",  "Mn",  "P",  "Temperature_Celsius"]
+                        cast_expressions = [pl.col(col).cast(pl.Float64) for col in columns_to_cast]
+                        s_df = s_df.with_columns(cast_expressions)
+                        sel_path = select_mat_temp_conf(near_main_df, s_df)
+                        sel_path = sel_path.sort("Fluence_1E19_n_cm2")
+                        fig.add_trace(go.Scatter(x=sel_path["Fluence_1E19_n_cm2"], y=sel_path["DT41J_Celsius"], mode="lines+markers",
+                                                 marker=dict(#color = colors_vd[o-1],
+                                                             size=8),
+                                                 line=dict(#color = colors_vd[o-1],
+                                                           width=3), 
+                                                 name=f"Traveler {o}", hoverinfo="none"))
+                        o+=1
         fig.update_layout(width=800, height=700)
         fig.add_annotation(text=f"RMSE = {loss_k[k-1]:.2f} ºC", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.95)
         fig.add_annotation(text=f"K = {k}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.90)
@@ -634,16 +663,16 @@ def _(np, t):
         y_hat = func(x_data, *popt)
         resid = y_data - y_hat
         s_sq = np.sum(resid**2) / dof
-    
+
         xfit = np.linspace(np.min(x_data), 12, 500)
         yfit = func(xfit, *popt)
-    
+
         J = jac_func(xfit, *popt)  
-    
+
         var_mean = np.einsum("ij,jk,ik->i", J, pcov, J)  # diag(J Cov J^T)
-    
+
         se_mean = np.sqrt(var_mean)
-    
+
         tcrit = t.ppf(1 - alpha_confidence/2, dof)
         ci_lo = yfit - tcrit * se_mean
         ci_hi = yfit + tcrit * se_mean
@@ -731,7 +760,138 @@ def _(
         _fig.update_xaxes(title="Cu", range=rangex_Cu)
         _fig.update_yaxes(title="Ni", range=rangey_Ni)
         return _fig
-    return (plot_cu_ni,)
+    return
+
+
+@app.cell
+def _(
+    calculate_AUC_astm,
+    get_k_nearest_auc_neighbors_from_auc,
+    pl,
+    rangex_Cu,
+    rangey_Ni,
+    select_mat_temp_conf,
+):
+    import plotly.express as px
+    def plot_cu_ni_new(df, df_plotter, df_plotter_auc, k):
+
+        df = calculate_AUC_astm(df)
+        auc = df["AUC"].to_numpy()[0]
+        near_main_df = select_mat_temp_conf(df_plotter_auc,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
+        df = df[0,["Product_Form",  "Cu",  "Ni",  "Mn",  "P",  "Temperature_Celsius"]]
+        df = df.with_columns(pl.lit(True).alias("Family"))
+        df = df.with_columns(pl.lit(3.5).alias("Size"))
+        near_main_df = near_main_df[:,["Product_Form",  "Cu",  "Ni",  "Mn",  "P",  "Temperature_Celsius"]]
+        near_main_df = near_main_df.with_columns(pl.lit(False).alias("Family"))
+        near_main_df = near_main_df.with_columns(pl.lit(0.5).alias("Size"))
+        plt_df = pl.concat([df, near_main_df])
+
+
+        _fig = px.scatter(plt_df, x="Cu", y="Ni", color="Family", size="Size",
+                          color_discrete_map={True: "#C72020", False: "#C77320"},
+                          hover_data=["Product_Form",  "Cu",  "Ni",  "Mn",  "P",  "Temperature_Celsius", "Family"])
+        _fig.update_layout(showlegend=False)
+        _fig.update_xaxes(title="Cu", range=rangex_Cu)
+        _fig.update_yaxes(title="Ni", range=rangey_Ni)
+        _fig.update_layout(width=600,height=600)
+        return _fig
+    return (plot_cu_ni_new,)
+
+
+@app.cell
+def _(
+    calculate_AUC_astm,
+    get_k_nearest_auc_neighbors_from_auc,
+    select_mat_temp_conf,
+):
+    import altair as alt
+
+    @alt.theme.register('plotly_theme', enable=True)
+    def plotly_theme():
+        return alt.theme.ThemeConfig({
+            'config': {
+                'background': '#FFFFFF',
+                'axis': {
+                    'gridColor': '#EEEEEE',
+                    'gridWidth': 1,
+                    'labelFont': 'sans-serif',
+                    'titleFont': 'sans-serif'
+                },
+                'range': {
+                    'category': [
+                        '#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', 
+                        '#19D3F3', '#FF6692', '#B6E880', '#FF97FF', '#FECB52'
+                    ]
+                },
+                'title': {
+                    'font': 'sans-serif'
+                },
+                'header': {
+                    'titleFont': 'sans-serif'
+                },
+                'legend': {
+                    'labelFont': 'sans-serif',
+                    'titleFont': 'sans-serif'
+                }
+            }
+        })
+
+    def plot_cu_ni_altair(df, df_plotter, df_plotter_auc, k, rangex_Cu, rangey_Ni):
+        """
+        Recrea el gráfico de dispersión de Cu vs. Ni usando la librería Altair.
+
+        Args:
+            df (pd.DataFrame): DataFrame con los datos de "Family".
+            df_plotter (pd.DataFrame): DataFrame con los datos de "Travelers".
+            df_plotter_auc (pd.DataFrame): DataFrame para el cálculo de la AUC.
+            k (int): Número de vecinos más cercanos a seleccionar.
+            rangex_Cu (list): Rango del eje X [min, max].
+            rangey_Ni (list): Rango del eje Y [min, max].
+
+        Returns:
+            altair.Chart: Objeto Altair Chart.
+        """
+        # El código para seleccionar los datos de 'Travelers'
+        auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
+        near_main_df = select_mat_temp_conf(df_plotter, get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
+
+        # Definir los gráficos de dispersión
+        family_chart = alt.Chart(df).mark_point(
+            size=100,
+            strokeWidth=1,
+            stroke="#651010"
+        ).encode(
+            x=alt.X("Cu", title="Cu", scale=alt.Scale(domain=rangex_Cu)),
+            y=alt.Y("Ni", title="Ni", scale=alt.Scale(domain=rangey_Ni)),
+            color=alt.value("#C72020"),
+            tooltip=["Cu", "Ni"]
+        ).properties(
+            title="Cu vs Ni"
+        )
+
+        travelers_chart = alt.Chart(near_main_df).mark_point(
+            size=100,
+            strokeWidth=1,
+            stroke="#8C5217"
+        ).encode(
+            x="Cu",
+            y="Ni",
+            color=alt.value("#C77320"),
+            tooltip=["Cu", "Ni"]
+        )
+
+        # Combinar los gráficos y añadir la leyenda
+        combined_chart = (family_chart + travelers_chart).properties(
+            width=400,
+            height=400
+        )
+
+
+
+
+
+        return combined_chart
+    return
 
 
 @app.cell
@@ -772,6 +932,47 @@ def _(pl):
         # This is the most efficient way to achieve the desired outcome.
         return df.join(selected_df, on=df.columns, how='anti')
     return (polars_remove_existing_rows,)
+
+
+@app.cell
+def _(np):
+    import matplotlib.cm as cm
+
+    # Número total de colores que deseas
+    num_colors = 800
+
+    # Divide el número total entre las dos paletas
+    num_colors_half = num_colors // 2
+
+    # Genera la primera mitad de colores con la paleta 'viridis'
+    colors_values_1 = np.linspace(0, 1, num_colors_half)
+    viridis_colors_rgba = cm.viridis(colors_values_1)
+    viridis_hex_colors = [
+        '#{:02x}{:02x}{:02x}'.format(
+            int(r * 255),
+            int(g * 255),
+            int(b * 255)
+        )
+        for r, g, b, a in viridis_colors_rgba
+    ]
+
+    # Genera la segunda mitad de colores con la paleta 'plasma'
+    colors_values_2 = np.linspace(0, 1, num_colors - num_colors_half)
+    plasma_colors_rgba = cm.plasma(colors_values_2)
+    plasma_hex_colors = [
+        '#{:02x}{:02x}{:02x}'.format(
+            int(r * 255),
+            int(g * 255),
+            int(b * 255)
+        )
+        for r, g, b, a in plasma_colors_rgba
+    ]
+
+    # Combina ambas listas para obtener los 800 colores
+    colors_vd = viridis_hex_colors + plasma_hex_colors
+
+
+    return
 
 
 if __name__ == "__main__":
