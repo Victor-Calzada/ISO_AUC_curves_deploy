@@ -105,7 +105,7 @@ def _():
 @app.cell
 def _(MAX_K, mo):
 
-    max_k_val = mo.ui.number(start=50, stop=MAX_K,step=5, value=400,label="Max K traveler")
+    max_k_val = mo.ui.number(start=50, stop=MAX_K,step=5, value=200,label="Max K traveler")
     return (max_k_val,)
 
 
@@ -159,21 +159,65 @@ def _(
     np,
     plt_conf_k,
 ):
-    loss_k, coef = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
+    loss_k, coef, obs = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
     fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, paths=fig_cu_ni.value)
     mo_fig = mo.ui.plotly(fig)
     a, b, c, alpha = popt
     if np.isnan(a):
         if drop_func.value == 0:
-            md_func = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b(1-e^{c\cdot \phi})$")
+            md_func = mo.md(r"### $\Delta T_{41J}= a\cdot \phi ^{\alpha}+b(1-e^{c\cdot \phi})$")
         else:
-            md_func = mo.md(r"$\Delta T_{41J}= a\cdot \phi ^{\alpha}+b\cdot log(\phi + 1)+c$")
+            md_func = mo.md(r"### $\Delta T_{41J}= a\cdot \phi ^{\alpha}+b\cdot log(\phi + 1)+c$")
     else:
         if drop_func.value == 0:
-            md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
+            md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
         else:
-            md_func = mo.md(f"$\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
-    return loss_k, md_func, mo_fig
+            md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
+    return loss_k, md_func, mo_fig, obs
+
+
+@app.cell
+def _(k_n, loss_k, loss_k_plot, mo, obs):
+    mo_fig_obs = mo.ui.plotly(loss_k_plot(loss_k, k_n.value, obs))
+    return (mo_fig_obs,)
+
+
+@app.cell
+def _():
+    # _x = np.linspace(0.01, 12, 200)
+    # auc=[]
+    # for co in coef:
+    #     _popt,_=co
+    #     if _popt is np.nan:
+    #         continue
+    #     val = func(_x, *_popt)
+    #     auc.append(simpson(y=val, x=_x, axis=0))
+    return
+
+
+@app.cell
+def _():
+    # _x = np.array(range(max_k_val.value))
+    # _y = np.array(auc)
+    # derivada_y_central = np.gradient(_y, _x)
+    return
+
+
+@app.cell
+def _():
+    # _y = np.array(auc)
+    # # _y = _y/np.max(_y)
+    # _der = derivada_y_central #/np.max(derivada_y_central)
+    # _dif = np.diff(_y)
+    # _og_y = _y[:-1]
+    # _per = _dif/_og_y*100
+    # _fig = go.Figure()
+    # _fig.add_trace(go.Scatter(x=list(range(max_k_val.value)), y=_y, mode="lines+markers",marker=dict(size=2.5),name="auc", showlegend=True))
+    # _fig.add_trace(go.Scatter(x=list(range(1,max_k_val.value)), y=_per, mode="lines+markers",marker=dict(size=2.5),name="per", showlegend=True))
+    # _fig.add_trace(go.Scatter(x=list(range(max_k_val.value)), y=_der, mode="lines+markers",marker=dict(size=2.5), showlegend=True,name="derivada"))
+    # _fig.add_vline(x=k_n.value-1, line_width=2, line_dash="dash", line_color="red")
+    # _fig
+    return
 
 
 @app.cell
@@ -183,9 +227,10 @@ def _(md_func):
 
 
 @app.cell
-def _(fig_cu_ni, mo, mo_fig, mo_fig_k):
+def _(fig_cu_ni, mo, mo_fig, mo_fig_k, mo_fig_obs):
     tab = mo.ui.tabs({
-        "K travelers": mo_fig_k,
+        "RMSE vs k": mo_fig_k,
+        "RMSE vs #Obs": mo_fig_obs,
         "Cu Ni": fig_cu_ni
     })
     mo.hstack([tab, mo_fig], justify="start",gap=0, widths=[1,1])
@@ -391,6 +436,7 @@ def _(
         y = df[objective].to_numpy()
         loss_mse=[]
         coef = []
+        obs = []
         if bounds is None:
             bounds = ([-np.inf, -np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf, np.inf])
         else:
@@ -403,6 +449,7 @@ def _(
 
             X_train = np.concatenate([X, X_k])
             y_train = np.concatenate([y, y_k])
+            obs.append(len(y_train))
             try:
                 popt, pcov =curve_fit(func, X_train.flatten(), y_train, maxfev=5000, bounds=bounds)
                 loss_mse.append(np.sqrt(mean_squared_error(y, func(X.flatten(), *popt))))
@@ -413,7 +460,7 @@ def _(
             except TypeError as t:
                 loss_mse.append(np.nan)
                 coef.append((np.nan,np.nan))
-        return loss_mse, coef
+        return loss_mse, coef, obs
     return (k_explore,)
 
 
@@ -727,15 +774,24 @@ def _(np, t):
 
 @app.cell
 def _(go, np):
-    def loss_k_plot(loss_k, k):
+    def loss_k_plot(loss_k, k, other=None):
         ks = list(range(1,len(loss_k)+1))
         _fig = go.Figure()
-        _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines+markers",marker=dict(size=2.5), showlegend=False))
-        if ~np.isnan(loss_k[k-1]):
+        if other is None:
+            _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines+markers",marker=dict(size=2.5), showlegend=False))
+            if ~np.isnan(loss_k[k-1]):
 
-            _fig.add_trace(go.Scatter(x=[k], y=[loss_k[k-1]], mode="markers", marker=dict(color="red", size=7), name="Selected K", showlegend=False))
+                _fig.add_trace(go.Scatter(x=[k], y=[loss_k[k-1]], mode="markers", 
+                                          marker=dict(color="red", size=7), name="Selected K", showlegend=False))
+            _fig.update_xaxes(title="K travelers")
+        else:
+            _fig.add_trace(go.Scatter(x=other, y=loss_k, mode="lines+markers",marker=dict(color="orange",size=2.5), showlegend=False))
+            if ~np.isnan(loss_k[k-1]):
+                _fig.add_trace(go.Scatter(x=[other[k-1]], y=[loss_k[k-1]], mode="markers", 
+                                          marker=dict(color="red", size=7), name="Selected K", showlegend=False))
+            _fig.update_xaxes(title="# Observations")
         _fig.update_layout(width=600,height=600)
-        _fig.update_xaxes(title="K travelers")
+
         _fig.update_yaxes(title="RMSE ºC")
         return _fig
     return (loss_k_plot,)
