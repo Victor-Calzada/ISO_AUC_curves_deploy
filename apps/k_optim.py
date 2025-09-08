@@ -49,7 +49,20 @@ def _():
 
 @app.cell
 def _(mo):
-    drop_case = mo.ui.dropdown(options={"Outside Case":-1, "Case 1":6, "Case 2":9, "Case 3":11, "Case 4":16, "Case 5":20}, label="Select Case",value="Outside Case")
+    drop_case = mo.ui.dropdown(options={"Outside Case":-1, 
+                                        "Case 1":6, 
+                                        "Case 2":9, 
+                                        "Case 3":11, 
+                                        "Case 4":16, 
+                                        "Case 5":20, 
+                                        "Case 6":520, 
+                                        "Case 7":316, 
+                                        "Case 8":797, 
+                                        "Case 9":777, 
+                                        "Case A": 453, 
+                                        "Case B":132, 
+                                        "Case C":563, 
+                                        "Case D":683}, label="Select Case",value="Outside Case")
     drop_func = mo.ui.dropdown(options={"Exponential":0, "Logarithmic":1}, label="Select f(x)", value="Exponential")
 
 
@@ -129,13 +142,6 @@ def _(dow_butt, k_n, max_k_val, mo):
 
 
 @app.cell
-def _(k_n, loss_k, loss_k_plot, mo):
-    _fig_k = loss_k_plot(loss_k, k_n.value)
-    mo_fig_k = mo.ui.plotly(_fig_k)
-    return (mo_fig_k,)
-
-
-@app.cell
 def _(d_c, df_plotter, df_plotter_auc, k_n, mo, plot_cu_ni_new):
     # _fig = plot_cu_ni_altair(d_c, df_plotter, df_plotter_auc, k_n.value, rangex_Cu, rangey_Ni)
     # fig_cu_ni = mo.ui.altair_chart(_fig)
@@ -173,51 +179,81 @@ def _(
             md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
         else:
             md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
-    return loss_k, md_func, mo_fig, obs
+    return coef, loss_k, md_func, mo_fig, obs
 
 
 @app.cell
-def _(k_n, loss_k, loss_k_plot, mo, obs):
-    mo_fig_obs = mo.ui.plotly(loss_k_plot(loss_k, k_n.value, obs))
-    return (mo_fig_obs,)
+def _(coef, func, np, simpson):
+    _x = np.linspace(0.01, 12, 200)
+    auc=[]
+    for co in coef:
+        _popt,_=co
+        if _popt is np.nan:
+            auc.append(np.nan)
+        else:
+            val = func(_x, *_popt)
+            auc.append(simpson(y=val, x=_x, axis=0))
+    return (auc,)
 
 
 @app.cell
-def _():
-    # _x = np.linspace(0.01, 12, 200)
-    # auc=[]
-    # for co in coef:
-    #     _popt,_=co
-    #     if _popt is np.nan:
-    #         continue
-    #     val = func(_x, *_popt)
-    #     auc.append(simpson(y=val, x=_x, axis=0))
-    return
-
-
-@app.cell
-def _():
-    # _x = np.array(range(max_k_val.value))
-    # _y = np.array(auc)
-    # derivada_y_central = np.gradient(_y, _x)
-    return
+def _(auc, max_k_val, np):
+    _x = np.array(range(max_k_val.value))
+    _y = np.array(auc)
+    derivada_y_central = np.gradient(_y, _x)
+    return (derivada_y_central,)
 
 
 @app.cell
 def _():
-    # _y = np.array(auc)
-    # # _y = _y/np.max(_y)
-    # _der = derivada_y_central #/np.max(derivada_y_central)
-    # _dif = np.diff(_y)
-    # _og_y = _y[:-1]
-    # _per = _dif/_og_y*100
     # _fig = go.Figure()
-    # _fig.add_trace(go.Scatter(x=list(range(max_k_val.value)), y=_y, mode="lines+markers",marker=dict(size=2.5),name="auc", showlegend=True))
-    # _fig.add_trace(go.Scatter(x=list(range(1,max_k_val.value)), y=_per, mode="lines+markers",marker=dict(size=2.5),name="per", showlegend=True))
-    # _fig.add_trace(go.Scatter(x=list(range(max_k_val.value)), y=_der, mode="lines+markers",marker=dict(size=2.5), showlegend=True,name="derivada"))
-    # _fig.add_vline(x=k_n.value-1, line_width=2, line_dash="dash", line_color="red")
+    # _fig.add_trace(go.Scatter(x=list(range(max_k_val.value)), y=auc, mode="lines+markers",marker=dict(size=2.5),name="auc", showlegend=True))
     # _fig
     return
+
+
+@app.cell
+def _(
+    add_scatter_to_secondary_y_from_fig,
+    auc,
+    derivada_y_central,
+    go,
+    k_n,
+    loss_k,
+    loss_k_plot,
+    mo,
+    np,
+    obs,
+):
+    _y = np.array(auc)
+    # _y = _y/np.max(_y)
+    _der = derivada_y_central #/np.max(derivada_y_central)
+    _dif = np.diff(_y)
+    _og_y = _y[:-1]
+    _per = _dif/_og_y*100
+
+
+
+
+    # _fig_k = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, min_k=1), np.cumsum(np.abs(_per)), trace_name="AUC % change")
+
+    # _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, obs, min_k=1), np.cumsum(np.abs(_per)), trace_name="AUC % change")
+
+    _fig_k = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, min_k=1), np.abs(_per), trace_name="AUC % change")
+
+    _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, obs, min_k=1), np.abs(_per), trace_name="AUC % change")
+
+    _fig_auc = go.Figure()
+    _fig_auc.add_trace(go.Scatter(x=np.array(range(1,len(auc)+1)), y=auc, mode="lines+markers",marker=dict(size=2.5),name="AUC", showlegend=False))
+    _fig_auc.add_trace(go.Scatter(x=[k_n.value], y=[auc[k_n.value-1]], mode="markers",showlegend=False))
+    _fig_auc.update_xaxes(title="K travelers")
+    _fig_auc.update_yaxes(title="AUC")
+    _fig_auc.update_layout(width=600,height=600)
+
+    mo_fig_k = mo.ui.plotly(_fig_k)
+    mo_fig_obs = mo.ui.plotly(_fig_obs)
+    mo_fig_auc = mo.ui.plotly(_fig_auc)
+    return mo_fig_auc, mo_fig_k, mo_fig_obs
 
 
 @app.cell
@@ -227,11 +263,12 @@ def _(md_func):
 
 
 @app.cell
-def _(fig_cu_ni, mo, mo_fig, mo_fig_k, mo_fig_obs):
+def _(fig_cu_ni, mo, mo_fig, mo_fig_auc, mo_fig_k, mo_fig_obs):
     tab = mo.ui.tabs({
         "RMSE vs k": mo_fig_k,
         "RMSE vs #Obs": mo_fig_obs,
-        "Cu Ni": fig_cu_ni
+        "AUC vs k": mo_fig_auc,
+        "Cu Ni": fig_cu_ni, 
     })
     mo.hstack([tab, mo_fig], justify="start",gap=0, widths=[1,1])
     return
@@ -774,19 +811,33 @@ def _(np, t):
 
 @app.cell
 def _(go, np):
-    def loss_k_plot(loss_k, k, other=None):
+    def loss_k_plot(loss_k, k, other=None, min_k=0):
         ks = list(range(1,len(loss_k)+1))
         _fig = go.Figure()
         if other is None:
             _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines+markers",marker=dict(size=2.5), showlegend=False))
             if ~np.isnan(loss_k[k-1]):
 
+
+                if min_k > 0 :
+                    indx = np.argsort(loss_k)
+                    indx = indx[:min_k]
+                    _fig.add_trace(go.Scatter(x=np.array(ks)[indx], y=np.array(loss_k)[indx], mode="markers", 
+                                          marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
+                                              name=f"Min {min_k} RMSE", showlegend=False))
                 _fig.add_trace(go.Scatter(x=[k], y=[loss_k[k-1]], mode="markers", 
                                           marker=dict(color="red", size=7), name="Selected K", showlegend=False))
             _fig.update_xaxes(title="K travelers")
         else:
             _fig.add_trace(go.Scatter(x=other, y=loss_k, mode="lines+markers",marker=dict(color="orange",size=2.5), showlegend=False))
             if ~np.isnan(loss_k[k-1]):
+
+                if min_k > 0 :
+                    indx = np.argsort(loss_k)
+                    indx = indx[:min_k]
+                    _fig.add_trace(go.Scatter(x=np.array(other)[indx], y=np.array(loss_k)[indx], mode="markers", 
+                                          marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
+                                              name=f"Min {min_k} RMSE", showlegend=False))
                 _fig.add_trace(go.Scatter(x=[other[k-1]], y=[loss_k[k-1]], mode="markers", 
                                           marker=dict(color="red", size=7), name="Selected K", showlegend=False))
             _fig.update_xaxes(title="# Observations")
@@ -795,6 +846,81 @@ def _(go, np):
         _fig.update_yaxes(title="RMSE ºC")
         return _fig
     return (loss_k_plot,)
+
+
+@app.cell
+def _(go, np):
+    def add_scatter_to_secondary_y_from_fig(fig: go.Figure, y_data, trace_name="Secondary Y Data"):
+        """
+        Añade un scatter plot a una figura de Plotly usando un eje Y secundario.
+        Toma los datos del eje X del primer trazo existente en la figura.
+
+        Args:
+            fig (go.Figure): La figura de Plotly a la que se añadirá el trazo.
+            y_data (list or array): Los datos para el eje Y secundario.
+            trace_name (str): El nombre del trazo en la leyenda.
+
+        Returns:
+            go.Figure: La figura de Plotly con el nuevo trazo y el eje secundario configurados.
+        """
+        # Verifica si la figura tiene trazos
+        if not fig.data:
+            raise ValueError("La figura no contiene trazos. No hay datos del eje X de donde extraer.")
+
+        # Extrae los datos del eje X del primer trazo
+        x_data = np.array(fig.data[0].x)
+        x_data = x_data[1:]
+        # Añade el nuevo trazo de scatter
+        indx = y_data<0.5
+
+        # color = ["green" if i else "violet" for i in indx]
+        y_data = np.cumsum(y_data)
+        fig.add_trace(go.Scatter(
+            x=x_data,
+            y=y_data,
+            mode='markers+lines',
+            marker=dict(size=2),
+            name=trace_name,showlegend=False,opacity=0.7,
+            yaxis='y2'  # Asocia el trazo al eje Y secundario
+        ))
+        x_data = x_data.astype(float)
+        x_data[~indx] = np.nan
+
+        y_to_plot = []
+        x_to_plot = []
+        for i in range(len(x_data)-1):
+            if np.isnan(x_data[i]):
+                y_to_plot = []
+                x_to_plot = []
+                continue
+            elif (len(y_to_plot)>5) and ((np.isnan(x_data[i+1])) or (i>=len(x_data))):
+                x_to_plot.append(x_data[i])
+                y_to_plot.append(y_data[i])
+
+                fig.add_trace(go.Scatter(
+                    x=x_to_plot,
+                    y=y_to_plot,
+                    mode='markers+lines',fill='tozeroy',
+                    marker=dict(size=2, color="green"), line=dict(color="green"),
+                    name=trace_name,showlegend=False,opacity=0.7,
+                    yaxis='y2'  # Asocia el trazo al eje Y secundario
+                ))
+            else:
+                x_to_plot.append(x_data[i])
+                y_to_plot.append(y_data[i])
+
+        # Configura el layout para incluir el eje Y secundario
+        fig.update_layout(
+            yaxis2=dict(
+                title=trace_name,
+                overlaying='y',
+                side='right'
+            )
+        )
+
+        return fig
+
+    return (add_scatter_to_secondary_y_from_fig,)
 
 
 @app.cell
