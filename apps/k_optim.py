@@ -537,27 +537,6 @@ def _(
 
 @app.cell
 def _(
-    calculate_AUC_astm,
-    func,
-    get_k_nearest_auc_neighbors_from_auc,
-    np,
-    pl,
-    select_mat_temp_conf,
-):
-    from delta_method import delta_method
-    def test_delta_func(df, df_plotter, df_plotter_auc, k, coef, func=func):
-        popt, pcov = coef[k-1]
-        auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
-        near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
-        aux_concat_df = pl.concat([df, near_main_df])
-        y, x = aux_concat_df["DT41J_Celsius"].to_numpy(),  aux_concat_df["Fluence_1E19_n_cm2"].to_numpy()
-        x_new = np.linspace(0.01, 10, 200)
-        return delta_method(popt=popt, pcov=pcov, x_new=x_new, x=x, y=y, f=func, alpha=0.05)
-    return
-
-
-@app.cell
-def _(
     calcular_bandas_de_ajuste_diego,
     calculate_AUC_astm,
     func,
