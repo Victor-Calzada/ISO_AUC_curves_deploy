@@ -1,11 +1,11 @@
 import marimo
 
-__generated_with = "0.14.11"
-app = marimo.App(width="medium")
+__generated_with = "0.16.1"
+app = marimo.App(width="full")
 
 
 @app.cell
-def _(mo, pl):
+def _(mo, np, pl):
     file = mo.notebook_location() / "public" / "df_plotter.csv"
     file2 = mo.notebook_location() / "public" / "df_plotter_astm_auc.csv"
 
@@ -24,6 +24,7 @@ def _(mo, pl):
 
     rangex_Fl = [df_plotter_big["Fluence_1E19_n_cm2"].min() - 1, df_plotter_big["Fluence_1E19_n_cm2"].max() + 1]
     rangey_41j = [df_plotter_big["DT41J_Celsius"].min() - 10, df_plotter_big["DT41J_Celsius"].max() + 10]
+    rangex_Fl_log =[np.log10(df_plotter_big["Fluence_1E19_n_cm2"].min() + 0.1), np.log10(df_plotter_big["Fluence_1E19_n_cm2"].max() + 1)]
     cols = ["Fluence_1E19_n_cm2"]
     objective= "DT41J_Celsius"
 
@@ -35,6 +36,7 @@ def _(mo, pl):
         df_plotter_big,
         rangex_Cu,
         rangex_Fl,
+        rangex_Fl_log,
         rangey_41j,
         rangey_Ni,
     )
@@ -49,6 +51,7 @@ def _():
 
 @app.cell
 def _(mo):
+    switch_log = mo.ui.switch(label="Log plot", value=False)
     drop_case = mo.ui.dropdown(options={"Outside Case":-1, 
                                         "Case 1":6, 
                                         "Case 2":9, 
@@ -66,8 +69,8 @@ def _(mo):
     drop_func = mo.ui.dropdown(options={"Exponential":0, "Logarithmic":1}, label="Select f(x)", value="Exponential")
 
 
-    mo.hstack([drop_case, drop_func], justify="start")
-    return drop_case, drop_func
+    mo.hstack([drop_case, drop_func, switch_log], justify="start")
+    return drop_case, drop_func, switch_log
 
 
 @app.cell
@@ -83,7 +86,6 @@ def _(drop_func, func_exp, func_log, jac_func_exp, jac_func_log, np):
         func = func_log
         jac_func = jac_func_log
         bounds = ([-np.inf, -np.inf, -np.inf, 0], [np.inf, np.inf, np.inf, 1])
-
     return bounds, func, jac_func
 
 
@@ -137,7 +139,6 @@ def _(K_SELECT, mo):
 @app.cell
 def _(dow_butt, k_n, max_k_val, mo):
     mo.hstack([k_n, max_k_val, dow_butt], gap=5, justify="start")
-
     return
 
 
@@ -333,8 +334,6 @@ def _(np):
         J[:, 3] = a * (x**alpha) * np.log(x + 1e-12) # Se añade 1e-12 para evitar log(0)
 
         return J
-
-
     return func_exp, func_log, jac_func_exp, jac_func_log
 
 
@@ -546,8 +545,10 @@ def _(
     np,
     pl,
     rangex_Fl,
+    rangex_Fl_log,
     rangey_41j,
     select_mat_temp_conf,
+    switch_log,
 ):
 
     def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, func = func, jac_func = jac_func, paths = None):
@@ -601,7 +602,10 @@ def _(
         fig.add_annotation(text=f"RMSE = {loss_k[k-1]:.2f} ºC", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.95)
         fig.add_annotation(text=f"K = {k}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.90)
         fig.add_annotation(text=f"#Obs = {obs}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.85)
-        fig.update_xaxes(title="Fluence_1E19_n_cm2", range=rangex_Fl)
+        if switch_log.value:
+            fig.update_xaxes(title="Fluence_1E19_n_cm2 (log scale)", type="log", range=rangex_Fl_log)
+        else:
+            fig.update_xaxes(title="Fluence_1E19_n_cm2",type="linear", range=rangex_Fl)
         fig.update_yaxes(title="DT41J_Celsius", range=rangey_41j)
         return fig, popt
     return (plt_conf_k,)
@@ -879,7 +883,8 @@ def _(go, np):
                 fig.add_trace(go.Scatter(
                     x=x_to_plot,
                     y=y_to_plot,
-                    mode='markers+lines',fill='tozeroy',
+                    mode='markers+lines',
+                    fill='tozeroy',
                     marker=dict(size=2, color="green"), line=dict(color="green"),
                     name=trace_name,showlegend=False,opacity=0.7,
                     yaxis='y2'  # Asocia el trazo al eje Y secundario
@@ -898,7 +903,6 @@ def _(go, np):
         )
 
         return fig
-
     return (add_scatter_to_secondary_y_from_fig,)
 
 
@@ -1131,8 +1135,6 @@ def _(np):
 
     # Combina ambas listas para obtener los 800 colores
     colors_vd = viridis_hex_colors + plasma_hex_colors
-
-
     return
 
 
