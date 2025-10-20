@@ -194,11 +194,11 @@ def _(coef, func, np, simpson):
         else:
             val = func(_x, *_popt)
             auc_val = simpson(y=val, x=_x, axis=0)
-            if auc_val < 10_000:
+            if np.abs(auc_val) < 4_000:
                 auc.append(auc_val)
             else:
                 auc.append(np.nan)
-        
+
     return (auc,)
 
 
@@ -259,7 +259,6 @@ def _(
     mo_fig_k = mo.ui.plotly(_fig_k)
     mo_fig_obs = mo.ui.plotly(_fig_obs)
     mo_fig_auc = mo.ui.plotly(_fig_auc)
-
     return mo_fig_auc, mo_fig_k, mo_fig_obs
 
 
