@@ -193,7 +193,12 @@ def _(coef, func, np, simpson):
             auc.append(np.nan)
         else:
             val = func(_x, *_popt)
-            auc.append(simpson(y=val, x=_x, axis=0))
+            auc_val = simpson(y=val, x=_x, axis=0)
+            if auc_val < 10_000:
+                auc.append(auc_val)
+            else:
+                auc.append(np.nan)
+        
     return (auc,)
 
 
@@ -254,6 +259,7 @@ def _(
     mo_fig_k = mo.ui.plotly(_fig_k)
     mo_fig_obs = mo.ui.plotly(_fig_obs)
     mo_fig_auc = mo.ui.plotly(_fig_auc)
+
     return mo_fig_auc, mo_fig_k, mo_fig_obs
 
 
@@ -855,9 +861,10 @@ def _(go, np):
         x_data = x_data[1:]
         # Añade el nuevo trazo de scatter
         indx = y_data<0.5
-
+        mask = np.isnan(y_data)
         # color = ["green" if i else "violet" for i in indx]
-        y_data = np.cumsum(y_data)
+        y_data = np.nancumsum(y_data)
+        y_data[mask] = np.nan
         fig.add_trace(go.Scatter(
             x=x_data,
             y=y_data,
