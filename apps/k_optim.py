@@ -43,13 +43,6 @@ def _(mo, np, pl):
 
 
 @app.cell
-def _():
-    # drop_case = mo.ui.dropdown(options={"Outside Case":d_c_prov, "Case 1":select_mat_temp_conf(df_plotter_big,df_plotter_auc_big[0]), "Case 2":select_mat_temp_conf(df_plotter_big,df_plotter_auc_big[1]), "Case 3":select_mat_temp_conf(df_plotter_big,df_plotter_auc_big[2]), "Case 4":select_mat_temp_conf(df_plotter_big,df_plotter_auc_big[3]), "Case 5":select_mat_temp_conf(df_plotter_big,df_plotter_auc_big[4])}, label="Select Case",value="Outside Case")
-    # drop_case
-    return
-
-
-@app.cell
 def _(mo):
     switch_log = mo.ui.switch(label="Log plot", value=False)
     drop_case = mo.ui.dropdown(options={"Outside Case":-1, 
@@ -107,14 +100,6 @@ def _(
         df_plotter = polars_remove_existing_rows(df=df_plotter_big, selected_df=d_c)
         df_plotter_auc = polars_remove_existing_rows(df=df_plotter_auc_big, selected_df=df_plotter_auc_big[drop_case.value])
     return d_c, df_plotter, df_plotter_auc
-
-
-@app.cell
-def _():
-    # d_c = drop_case.value
-    # df_plotter_auc = polars_remove_existing_rows(df=df_plotter_auc_big, )
-    # df_plotter = polars_remove_existing_rows(df=df_plotter_big, selected_df=drop_case.value)
-    return
 
 
 @app.cell
@@ -198,7 +183,6 @@ def _(coef, func, np, simpson):
                 auc.append(auc_val)
             else:
                 auc.append(np.nan)
-
     return (auc,)
 
 
@@ -220,9 +204,13 @@ def _():
 
 @app.cell
 def _(
+    K_SELECT,
     add_scatter_to_secondary_y_from_fig,
     auc,
+    auc_k,
+    d_c,
     derivada_y_central,
+    df_plotter_auc,
     go,
     k_n,
     loss_k,
@@ -256,10 +244,30 @@ def _(
     _fig_auc.update_yaxes(title="AUC")
     _fig_auc.update_layout(width=600,height=600)
 
+    _fig_auc_2 = auc_k(d_c, df_plotter_auc, k_select = K_SELECT)
+    _fig_auc_2.update_layout(width=600,height=600)
+
     mo_fig_k = mo.ui.plotly(_fig_k)
     mo_fig_obs = mo.ui.plotly(_fig_obs)
-    mo_fig_auc = mo.ui.plotly(_fig_auc)
+    mo_fig_auc = mo.ui.plotly(_fig_auc_2)
     return mo_fig_auc, mo_fig_k, mo_fig_obs
+
+
+@app.cell
+def _(K_SELECT, calculate_AUC_astm, go, np):
+    def auc_k(d_c, df_plotter_auc, k_select = K_SELECT):
+        auc = calculate_AUC_astm(d_c)["AUC"].to_numpy()[0]
+        aucs_sort = df_plotter_auc[np.abs(auc-df_plotter_auc["AUC"].to_numpy()).argsort()]
+        x = list(range(1, len(aucs_sort)+1))
+        _fig = go.Figure()
+        _fig.add_trace(go.Scatter(x = x,y=aucs_sort["AUC"], mode='markers+lines', name='Nearest Neighbors', marker=dict(size=1)))
+        _fig.add_hline(y=auc, line_dash="dash", line_color="red", annotation_text="Selected AUC", annotation_position="top left")
+        _fig.add_vline(x=k_select, line_dash="dash", line_color="black", annotation_text="Max selected k", annotation_position="top left")
+        _fig.update_xaxes(title="k")
+        _fig.update_yaxes(title="AUC")
+        return _fig
+
+    return (auc_k,)
 
 
 @app.cell
