@@ -151,8 +151,8 @@ def _(
     np,
     plt_conf_k,
 ):
-    loss_k, coef, obs = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
-    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, paths=fig_cu_ni.value)
+    loss_k, coef, obs, loss_k_all = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
+    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, loss_k_all, paths=fig_cu_ni.value)
     mo_fig = mo.ui.plotly(fig)
     a, b, c, alpha = popt
     if np.isnan(a):
@@ -165,7 +165,7 @@ def _(
             md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
         else:
             md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
-    return coef, loss_k, md_func, mo_fig, obs
+    return coef, loss_k, loss_k_all, md_func, mo_fig, obs
 
 
 @app.cell
@@ -214,6 +214,7 @@ def _(
     go,
     k_n,
     loss_k,
+    loss_k_all,
     loss_k_plot,
     mo,
     np,
@@ -233,9 +234,9 @@ def _(
 
     # _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, obs, min_k=1), np.cumsum(np.abs(_per)), trace_name="AUC % change")
 
-    _fig_k = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, min_k=1), np.abs(_per), trace_name="AUC % change")
+    _fig_k = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value,loss_k_all=loss_k_all, min_k=1), np.abs(_per), trace_name="AUC % change")
 
-    _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, obs, min_k=1), np.abs(_per), trace_name="AUC % change")
+    _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, other=obs, min_k=1), np.abs(_per), trace_name="AUC % change")
 
     _fig_auc = go.Figure()
     _fig_auc.add_trace(go.Scatter(x=np.array(range(1,len(auc)+1)), y=auc, mode="lines+markers",marker=dict(size=2.5),name="AUC", showlegend=False))
@@ -266,7 +267,6 @@ def _(K_SELECT, calculate_AUC_astm, go, np):
         _fig.update_xaxes(title="k")
         _fig.update_yaxes(title="AUC")
         return _fig
-
     return (auc_k,)
 
 
@@ -484,6 +484,7 @@ def _(
         X = df[cols].to_numpy()
         y = df[objective].to_numpy()
         loss_mse=[]
+        loss_rmse_all = []
         coef = []
         obs = []
         if bounds is None:
@@ -502,14 +503,17 @@ def _(
             try:
                 popt, pcov =curve_fit(func, X_train.flatten(), y_train, maxfev=5000, bounds=bounds)
                 loss_mse.append(np.sqrt(mean_squared_error(y, func(X.flatten(), *popt))))
+                loss_rmse_all.append(np.sqrt(mean_squared_error(y_train, func(X_train.flatten(), *popt))))
                 coef.append((popt,pcov))
             except RuntimeError as e:
                 loss_mse.append(np.nan)
+                loss_rmse_all.append(np.nan)
                 coef.append((np.nan,np.nan))
             except TypeError as t:
                 loss_mse.append(np.nan)
+                loss_rmse_all.append(np.nan)
                 coef.append((np.nan,np.nan))
-        return loss_mse, coef, obs
+        return loss_mse, coef, obs, loss_rmse_all
     return (k_explore,)
 
 
@@ -564,7 +568,7 @@ def _(
     switch_log,
 ):
 
-    def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, func = func, jac_func = jac_func, paths = None):
+    def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, loss_k_all, func = func, jac_func = jac_func, paths = None):
         fig = go.Figure()
         obs = np.nan
         popt = np.nan,np.nan,np.nan,np.nan
@@ -612,7 +616,7 @@ def _(
                                                  name=f"Traveler {o}", hoverinfo="none"))
                         o+=1
         fig.update_layout(width=800, height=700)
-        fig.add_annotation(text=f"RMSE = {loss_k[k-1]:.2f} ºC", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.95)
+        fig.add_annotation(text=f"RMSEfam = {loss_k[k-1]:.2f} ºC   RMSEall = {loss_k_all[k-1]:.2f} ºC", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.95)
         fig.add_annotation(text=f"K = {k}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.90)
         fig.add_annotation(text=f"#Obs = {obs}", showarrow=False, font=dict(size=18), xref="paper", yref="paper", x=0.03, y=0.85)
         if switch_log.value:
@@ -807,20 +811,23 @@ def _(np, t):
 
 @app.cell
 def _(go, np):
-    def loss_k_plot(loss_k, k, other=None, min_k=0):
+    def loss_k_plot(loss_k,k,loss_k_all=None, other=None, min_k=0):
         ks = list(range(1,len(loss_k)+1))
         _fig = go.Figure()
         if other is None:
-            _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines+markers",marker=dict(size=2.5), showlegend=False))
+            _fig.add_trace(go.Scatter(x=ks, y=loss_k, mode="lines+markers",name="RMSEfam",marker=dict(size=2.5), showlegend=True))
+            if loss_k_all is not None:
+                _fig.add_trace(go.Scatter(x=ks, y=loss_k_all, mode="lines+markers",name="RMSEall", marker=dict(size=2.5), showlegend=True))
             if ~np.isnan(loss_k[k-1]):
 
 
-                if min_k > 0 :
-                    indx = np.argsort(loss_k)
-                    indx = indx[:min_k]
-                    _fig.add_trace(go.Scatter(x=np.array(ks)[indx], y=np.array(loss_k)[indx], mode="markers", 
-                                          marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
-                                              name=f"Min {min_k} RMSE", showlegend=False))
+                # if min_k > 0 :
+                #     indx = np.argsort(loss_k)
+                #     indx = indx[:min_k]
+                #     _fig.add_trace(go.Scatter(x=np.array(ks)[indx], y=np.array(loss_k)[indx], mode="markers", 
+                #                           marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
+                #                               name=f"Min {min_k} RMSE", showlegend=False))
+            
                 _fig.add_trace(go.Scatter(x=[k], y=[loss_k[k-1]], mode="markers", 
                                           marker=dict(color="red", size=7), name="Selected K", showlegend=False))
             _fig.update_xaxes(title="K travelers")
@@ -828,12 +835,12 @@ def _(go, np):
             _fig.add_trace(go.Scatter(x=other, y=loss_k, mode="lines+markers",marker=dict(color="orange",size=2.5), showlegend=False))
             if ~np.isnan(loss_k[k-1]):
 
-                if min_k > 0 :
-                    indx = np.argsort(loss_k)
-                    indx = indx[:min_k]
-                    _fig.add_trace(go.Scatter(x=np.array(other)[indx], y=np.array(loss_k)[indx], mode="markers", 
-                                          marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
-                                              name=f"Min {min_k} RMSE", showlegend=False))
+                # if min_k > 0 :
+                #     indx = np.argsort(loss_k)
+                #     indx = indx[:min_k]
+                #     _fig.add_trace(go.Scatter(x=np.array(other)[indx], y=np.array(loss_k)[indx], mode="markers", 
+                #                           marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
+                #                               name=f"Min {min_k} RMSE", showlegend=False))
                 _fig.add_trace(go.Scatter(x=[other[k-1]], y=[loss_k[k-1]], mode="markers", 
                                           marker=dict(color="red", size=7), name="Selected K", showlegend=False))
             _fig.update_xaxes(title="# Observations")
@@ -876,8 +883,9 @@ def _(go, np):
             x=x_data,
             y=y_data,
             mode='markers+lines',
-            marker=dict(size=2),
-            name=trace_name,showlegend=False,opacity=0.7,
+            marker=dict(size=2, color="#AD52AA"),
+            legendgroup="AUC",
+            name=trace_name,showlegend=True,opacity=0.7,
             yaxis='y2'  # Asocia el trazo al eje Y secundario
         ))
         x_data = x_data.astype(float)
@@ -900,6 +908,7 @@ def _(go, np):
                     mode='markers+lines',
                     fill='tozeroy',
                     marker=dict(size=2, color="green"), line=dict(color="green"),
+                    legendgroup="AUC",
                     name=trace_name,showlegend=False,opacity=0.7,
                     yaxis='y2'  # Asocia el trazo al eje Y secundario
                 ))
