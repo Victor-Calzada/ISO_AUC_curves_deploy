@@ -7,11 +7,13 @@ app = marimo.App(width="full")
 @app.cell
 def _(mo, np, pl):
     file = mo.notebook_location() / "public" / "df_plotter.csv"
-    file2 = mo.notebook_location() / "public" / "df_plotter_astm_auc.csv"
+    # file2 = mo.notebook_location() / "public" / "df_plotter_astm_auc.csv"
+    file3 = mo.notebook_location() / "public" / "df_plotter_astm_auc_var.csv"
 
 
     df_plotter_big = pl.read_csv(str(file))
-    df_plotter_auc_big = pl.read_csv(str(file2))
+    # df_plotter_auc_big = pl.read_csv(str(file2))
+    df_plotter_var_big = pl.read_csv(str(file3))
 
     d_c_prov = pl.DataFrame({"Product_Form": ["F", "F", "F"],
      "Cu":[0.14,0.14,0.14], "Ni":[0.11,0.11,0.11], "Mn":[1.3, 1.3, 1.3], "P":[0.017,0.017,0.017], 
@@ -32,14 +34,42 @@ def _(mo, np, pl):
     return (
         MAX_K,
         d_c_prov,
-        df_plotter_auc_big,
         df_plotter_big,
+        df_plotter_var_big,
         rangex_Cu,
         rangex_Fl,
         rangex_Fl_log,
         rangey_41j,
         rangey_Ni,
     )
+
+
+@app.cell
+def _(df_plotter_var_big, mo):
+    drop_col_auc = mo.ui.dropdown(options=df_plotter_var_big.columns[7:], value=df_plotter_var_big.columns[-1])
+
+    drop_col_auc
+    return (drop_col_auc,)
+
+
+@app.cell
+def _(drop_col_auc, np):
+    Fl = np.linspace(1e22, float(drop_col_auc.value.split("AUC")[1]), 100)
+    return (Fl,)
+
+
+@app.cell
+def _(df_plotter_var_big, drop_col_auc):
+    use_cols = df_plotter_var_big.columns[1:7]
+    use_cols.append(drop_col_auc.value)
+    return (use_cols,)
+
+
+@app.cell
+def _(df_plotter_var_big, use_cols):
+    df_plotter_auc_big = df_plotter_var_big[use_cols]
+    df_plotter_auc_big = df_plotter_auc_big.rename({df_plotter_auc_big.columns[-1]:"AUC"})
+    return (df_plotter_auc_big,)
 
 
 @app.cell
@@ -128,16 +158,17 @@ def _(dow_butt, k_n, max_k_val, mo):
 
 
 @app.cell
-def _(d_c, df_plotter, df_plotter_auc, k_n, mo, plot_cu_ni_new):
+def _(Fl, d_c, df_plotter, df_plotter_auc, k_n, mo, plot_cu_ni_new):
     # _fig = plot_cu_ni_altair(d_c, df_plotter, df_plotter_auc, k_n.value, rangex_Cu, rangey_Ni)
     # fig_cu_ni = mo.ui.altair_chart(_fig)
-    _fig = plot_cu_ni_new(d_c, df_plotter, df_plotter_auc, k_n.value)
+    _fig = plot_cu_ni_new(d_c, df_plotter, df_plotter_auc, k_n.value, Fl=Fl)
     fig_cu_ni = mo.ui.plotly(_fig)
     return (fig_cu_ni,)
 
 
 @app.cell
 def _(
+    Fl,
     bounds,
     d_c,
     df_plotter,
@@ -151,8 +182,8 @@ def _(
     np,
     plt_conf_k,
 ):
-    loss_k, coef, obs, loss_k_all = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func)
-    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, loss_k_all, paths=fig_cu_ni.value)
+    loss_k, coef, obs, loss_k_all = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func, Fl=Fl)
+    fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, loss_k_all, paths=fig_cu_ni.value, Fl=Fl)
     mo_fig = mo.ui.plotly(fig)
     a, b, c, alpha = popt
     if np.isnan(a):
@@ -204,8 +235,8 @@ def _():
 
 @app.cell
 def _(
+    Fl,
     K_SELECT,
-    add_scatter_to_secondary_y_from_fig,
     auc,
     auc_k,
     d_c,
@@ -234,10 +265,10 @@ def _(
 
     # _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, obs, min_k=1), np.cumsum(np.abs(_per)), trace_name="AUC % change")
 
-    _fig_k = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value,loss_k_all=loss_k_all, min_k=1), np.abs(_per), trace_name="AUC % change")
-
-    _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, other=obs, min_k=1), np.abs(_per), trace_name="AUC % change")
-
+    # _fig_k = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value,loss_k_all=loss_k_all, min_k=1), np.abs(_per), trace_name="AUC % change")
+    _fig_k = loss_k_plot(loss_k, k_n.value,loss_k_all=loss_k_all, min_k=1)
+    # _fig_obs = add_scatter_to_secondary_y_from_fig(loss_k_plot(loss_k, k_n.value, other=obs, min_k=1), np.abs(_per), trace_name="AUC % change")
+    _fig_obs = loss_k_plot(loss_k, k_n.value, other=obs, min_k=1)
     _fig_auc = go.Figure()
     _fig_auc.add_trace(go.Scatter(x=np.array(range(1,len(auc)+1)), y=auc, mode="lines+markers",marker=dict(size=2.5),name="AUC", showlegend=False))
     _fig_auc.add_trace(go.Scatter(x=[k_n.value], y=[auc[k_n.value-1]], mode="markers",showlegend=False))
@@ -245,7 +276,7 @@ def _(
     _fig_auc.update_yaxes(title="AUC")
     _fig_auc.update_layout(width=600,height=600)
 
-    _fig_auc_2 = auc_k(d_c, df_plotter_auc, k_select = K_SELECT)
+    _fig_auc_2 = auc_k(d_c, df_plotter_auc, k_select = K_SELECT, Fl=Fl)
     _fig_auc_2.update_layout(width=600,height=600)
 
     mo_fig_k = mo.ui.plotly(_fig_k)
@@ -256,8 +287,8 @@ def _(
 
 @app.cell
 def _(K_SELECT, calculate_AUC_astm, go, np):
-    def auc_k(d_c, df_plotter_auc, k_select = K_SELECT):
-        auc = calculate_AUC_astm(d_c)["AUC"].to_numpy()[0]
+    def auc_k(d_c, df_plotter_auc, k_select = K_SELECT, Fl=None):
+        auc = calculate_AUC_astm(d_c, Fl=Fl)["AUC"].to_numpy()[0]
         aucs_sort = df_plotter_auc[np.abs(auc-df_plotter_auc["AUC"].to_numpy()).argsort()]
         x = list(range(1, len(aucs_sort)+1))
         _fig = go.Figure()
@@ -397,9 +428,31 @@ def _(np):
 
 @app.cell
 def _(TTS_eval, np, pl, simpson):
-    def calculate_AUC_astm(df: pl.DataFrame) -> pl.DataFrame:
+    # def calculate_AUC_astm(df, Fl=None):
+
+    #     if Fl is None:
+    #         Fl = np.array(
+    #             [i * 1e18 for i in range(1, int(1e20 / 1e18) + 1)]) * 1e4  # n/m2ç
+    #     pf = df["Product_Form"].unique()
+    #     for p in pf:
+    #         aux_df = df[df["Product_Form"] == p]
+    #         df.loc[df["Product_Form"] == p, "AUC"] = \
+    #             simpson(y=np.array([TTS_eval(pf=p,
+    #                                          cu=aux_df["Cu"].to_numpy(
+    #                                          ),
+    #                                          ni=aux_df["Ni"].to_numpy(
+    #                                          ),
+    #                                          mn=aux_df["Mn"],
+    #                                          p=aux_df["P"],
+    #                                          t=aux_df["Temperature_Celsius"],
+    #                                          fl=Fli) for Fli in Fl]),
+    #                     x=Fl*1e-23, axis=0)
+    #     return df
+
+    def calculate_AUC_astm(df: pl.DataFrame, Fl = None) -> pl.DataFrame:
         # 1. Preparar el array Fl, que es independiente del DataFrame.
-        Fl = np.array([i * 1e18 for i in range(1, int(1e20 / 1e18) + 1)]) * 1e4 # n/m^2
+        if Fl is None:    
+            Fl = np.array([i * 1e18 for i in range(1, int(1e20 / 1e18) + 1)]) * 1e4 # n/m^2
         dfs=[]
         for i in df.group_by("Product_Form"):
             p = i[0][0]
@@ -477,9 +530,9 @@ def _(
     np,
     select_mat_temp_conf,
 ):
-    def k_explore(df, df_plotter_auc, df_plotter, cols='Fluence_1E19_n_cm2',objective='DT41J_Celsius', func=func, bounds=None):
+    def k_explore(df, df_plotter_auc, df_plotter, cols='Fluence_1E19_n_cm2',objective='DT41J_Celsius', func=func, bounds=None, Fl=None):
         k_loss_mse=[]
-        d_c_auc = calculate_AUC_astm(df)
+        d_c_auc = calculate_AUC_astm(df, Fl=Fl)
         auc = d_c_auc["AUC"].to_numpy()[0]
         X = df[cols].to_numpy()
         y = df[objective].to_numpy()
@@ -538,8 +591,8 @@ def _(
     pl,
     select_mat_temp_conf,
 ):
-    def select_anomaly(df, df_plotter, df_plotter_auc, k):
-        auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
+    def select_anomaly(df, df_plotter, df_plotter_auc, k, Fl=None):
+        auc = calculate_AUC_astm(df, Fl=Fl)["AUC"].to_numpy()[0]
         near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
         df = df.with_columns(pl.lit(1).alias("Family"))
         near_main_df = near_main_df.with_columns(pl.lit(0).alias("Family"))
@@ -568,14 +621,14 @@ def _(
     switch_log,
 ):
 
-    def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, loss_k_all, func = func, jac_func = jac_func, paths = None):
+    def plt_conf_k(df, df_plotter, df_plotter_auc, k, coef, loss_k, loss_k_all, func = func, jac_func = jac_func, paths = None, Fl=None):
         fig = go.Figure()
         obs = np.nan
         popt = np.nan,np.nan,np.nan,np.nan
         if ~np.isnan(loss_k[k-1]):
             popt, pcov = coef[k-1]
             # y_new_fit, x_new = pred_from_fit(coef, k, func)
-            auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
+            auc = calculate_AUC_astm(df, Fl=Fl)["AUC"].to_numpy()[0]
             near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
             aux_concat_df = pl.concat([df, near_main_df])
             obs = aux_concat_df.shape[0]
@@ -827,7 +880,7 @@ def _(go, np):
                 #     _fig.add_trace(go.Scatter(x=np.array(ks)[indx], y=np.array(loss_k)[indx], mode="markers", 
                 #                           marker=dict(color="black", size=7, symbol="diamond", line=dict(width=1, color="grey")), 
                 #                               name=f"Min {min_k} RMSE", showlegend=False))
-            
+
                 _fig.add_trace(go.Scatter(x=[k], y=[loss_k[k-1]], mode="markers", 
                                           marker=dict(color="red", size=7), name="Selected K", showlegend=False))
             _fig.update_xaxes(title="K travelers")
@@ -926,7 +979,7 @@ def _(go, np):
         )
 
         return fig
-    return (add_scatter_to_secondary_y_from_fig,)
+    return
 
 
 @app.cell
@@ -938,9 +991,9 @@ def _(
     rangey_Ni,
     select_mat_temp_conf,
 ):
-    def plot_cu_ni(df, df_plotter, df_plotter_auc, k):
+    def plot_cu_ni(df, df_plotter, df_plotter_auc, k, Fl=None):
         _fig = go.Figure()
-        auc = calculate_AUC_astm(df)["AUC"].to_numpy()[0]
+        auc = calculate_AUC_astm(df, Fl=Fl)["AUC"].to_numpy()[0]
         near_main_df = select_mat_temp_conf(df_plotter,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
         _fig.add_trace(go.Scatter(x=df["Cu"], y=df["Ni"], mode="markers", marker=dict(size=10, color= "#C72020", line=dict(color="#651010", width=1)), name="Family"))
         _fig.add_trace(go.Scatter(x=near_main_df["Cu"], y=near_main_df["Ni"], mode="markers",marker=dict(color="#C77320",line=dict(color="#8C5217", width=1)), name="Travelers"))
@@ -961,9 +1014,9 @@ def _(
     select_mat_temp_conf,
 ):
     import plotly.express as px
-    def plot_cu_ni_new(df, df_plotter, df_plotter_auc, k):
+    def plot_cu_ni_new(df, df_plotter, df_plotter_auc, k, Fl=None):
 
-        df = calculate_AUC_astm(df)
+        df = calculate_AUC_astm(df, Fl=Fl)
         auc = df["AUC"].to_numpy()[0]
         near_main_df = select_mat_temp_conf(df_plotter_auc,get_k_nearest_auc_neighbors_from_auc(df_plotter_auc, auc, k))
         df = df[0,["Product_Form",  "Cu",  "Ni",  "Mn",  "P",  "Temperature_Celsius"]]
