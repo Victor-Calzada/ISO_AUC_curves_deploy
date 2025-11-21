@@ -113,7 +113,6 @@ def _(mo):
                                         "Case B": 132,
                                         "Case C": 563,
                                         "Case D": 683}, label="Select Case", value="Outside Case")
-
     return (drop_case,)
 
 
