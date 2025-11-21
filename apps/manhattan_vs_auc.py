@@ -59,8 +59,6 @@ def _(mo, np, pl):
 def _(df_plotter_var_big, mo):
     drop_col_auc = mo.ui.dropdown(
         options=df_plotter_var_big.columns[7:], value=df_plotter_var_big.columns[-1])
-
-
     return (drop_col_auc,)
 
 
@@ -73,7 +71,6 @@ def _(drop_col_auc, np):
 @app.cell
 def _(MAX_K, mo):
     k_n = mo.ui.slider(label="Number of Neighbors (k)", start=1, stop=MAX_K, step=1, value=10, full_width=True)
-
     return (k_n,)
 
 
@@ -116,8 +113,6 @@ def _(mo):
                                         "Case B": 132,
                                         "Case C": 563,
                                         "Case D": 683}, label="Select Case", value="Outside Case")
-
-
 
     return (drop_case,)
 
@@ -185,7 +180,6 @@ def _(Fl, TTS_eval, d_c, df_plotter_auc, k_n, manhattan_distance, np, pl):
         dist[i] = manhattan_distance(curva_sel, curva_vec)
     df_plotter_auc_dist = df_plotter_auc.with_columns(pl.Series("Distance", dist))
     neig_dist = df_plotter_auc_dist.sort("Distance").head(k_n.value)
-    
     return (neig_dist,)
 
 
@@ -231,7 +225,7 @@ def _(
                    [{"colspan": 2}, None]],
             subplot_titles=("","", ""), column_widths=[0.4, 0.6], row_heights=[0.8, 0.2])
         # primer plot
-    
+
         fig.add_trace(go.Scatter(
             x=neig_com["Cu"].to_numpy(),
             y=neig_com["Ni"].to_numpy(),
@@ -274,7 +268,7 @@ def _(
         neig_com_complet = select_mat_temp_conf(df_plotter, neig_com)
         anti_auc_complet = select_mat_temp_conf(df_plotter, anti_auc)
         anti_dist_complet = select_mat_temp_conf(df_plotter, anti_dist)
-    
+
         fig.add_trace(go.Scatter(
             x=neig_com_complet["Fluence_1E19_n_cm2"].to_numpy(),
             y=neig_com_complet["DT41J_Celsius"].to_numpy(),
@@ -313,13 +307,12 @@ def _(
         ), row=1, col=2)
         fig.update_xaxes(title_text="Fluence (1E19 n/cm²)", range=rangex_Fl, row=1, col=2)
         fig.update_yaxes(title_text="DT41J (°C)", range=rangey_41j, row=1, col=2)
-    
+
         # tercer plot
         fig.add_trace(go.Bar(x=["Common Neighbors", "AUC Only Neighbors", "Distance Only Neighbors", "Selected Case"],
                              y=[neig_com.height, anti_auc.height, anti_dist.height, 1],marker_color=["#C77320", "#3BA2FF", "#1EC767", "#C72020"], showlegend=False),  row=2, col=1)
         fig.update_layout( height=900, title_text="Neighbors Analysis")
         return fig
-
     return (plot_all,)
 
 
@@ -356,8 +349,23 @@ def _(np):
 
 
 @app.cell
-def _():
-    return
+def _(pl):
+    def polars_remove_existing_rows(df: pl.DataFrame, selected_df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Removes all rows from df that also exist in selected_df.
+
+        Args:
+            df: The Polars DataFrame from which to remove rows.
+            selected_df: The Polars DataFrame containing the rows to be removed.
+
+        Returns:
+            A new Polars DataFrame with the rows from selected_df removed.
+        """
+        # A left anti join keeps only the rows from the left DataFrame (df)
+        # that do NOT have a match in the right DataFrame (selected_df).
+        # This is the most efficient way to achieve the desired outcome.
+        return df.join(selected_df, on=df.columns, how='anti')
+    return (polars_remove_existing_rows,)
 
 
 @app.cell
