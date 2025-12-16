@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.1"
+__generated_with = "0.18.4"
 app = marimo.App(width="full")
 
 
@@ -108,7 +108,7 @@ def _(drop_func, func_exp, func_log, jac_func_exp, jac_func_log, np):
 
         func = func_log
         jac_func = jac_func_log
-        bounds = ([-np.inf, -np.inf, -np.inf, 0], [np.inf, np.inf, np.inf, 1])
+        bounds = ([-np.inf, -np.inf, 0], [np.inf, np.inf, 1])
     return bounds, func, jac_func
 
 
@@ -185,7 +185,7 @@ def _(
     loss_k, coef, obs, loss_k_all = k_explore(d_c, df_plotter_auc, df_plotter, bounds=bounds,func=func, Fl=Fl)
     fig,popt = plt_conf_k(d_c, df_plotter, df_plotter_auc, k_n.value, coef, loss_k, loss_k_all, paths=fig_cu_ni.value, Fl=Fl)
     mo_fig = mo.ui.plotly(fig)
-    a, b, c, alpha = popt
+    a,*_= popt
     if np.isnan(a):
         if drop_func.value == 0:
             md_func = mo.md(r"### $\Delta T_{41J}= a\cdot \phi ^{\alpha}+b(1-e^{c\cdot \phi})$")
@@ -193,9 +193,12 @@ def _(
             md_func = mo.md(r"### $\Delta T_{41J}= a\cdot \phi ^{\alpha}+b\cdot log(\phi + 1)+c$")
     else:
         if drop_func.value == 0:
+            a, b, c, alpha = popt
             md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}(1-e^{{{c:.3f}\\cdot \\phi}})$")
+        
         else:
-            md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)+{c:.3f}$")
+            a, b, alpha = popt
+            md_func = mo.md(f"### $\Delta T_{{41J}}= {a:.3f}\\cdot \\phi ^{{{alpha:.3f}}}+{b:.3f}\\cdot \\log(\\phi + 1)$")
     return coef, loss_k, loss_k_all, md_func, mo_fig, obs
 
 
@@ -326,6 +329,11 @@ def _():
     import polars as pl
 
     import plotly.graph_objects as go
+
+    import plotly.io as pio
+
+    # Set 'simple_white' as the default theme for all future plots
+    pio.templates.default = "plotly_white"
     return go, mo, np, pl
 
 
@@ -355,27 +363,33 @@ def _(np):
         galpha = a*(x**alpha)*ln_x
         return np.vstack([ga, gb, gc, galpha]).T
 
-    def func_log(x, a, b, c, alpha):
-        return (a*x**alpha)+(b*np.log(x))+c
+    def func_log(x, a, b, alpha):
+        # Se ha eliminado el término '+ c'
+        return (a * x**alpha) + (b * np.log(x))
 
-    def jac_func_log(x, a, b, c, alpha):
+    def jac_func_log(x, a, b, alpha):
         """
-        Jacobiano analítico de la función 'func' con respecto a los parámetros a, b, c, alpha.
+        Jacobiano analítico de la función sin la constante 'c'.
+        Parámetros: a, b, alpha.
         """
-        J = np.zeros((len(x), 4))
+        # Inicializamos una matriz de N filas y 3 columnas (antes eran 4)
+        J = np.zeros((len(x), 3))
 
-        # Derivada parcial con respecto a 'a'
+        # Término de seguridad para evitar log(0)
+        log_x = np.log(x + 1e-12)
+
+        # 1. Derivada parcial con respecto a 'a'
+        # d/da [a * x^alpha] = x^alpha
         J[:, 0] = x**alpha
 
-        # Derivada parcial con respecto a 'b'
-        J[:, 1] = np.log(x + 1e-12) # Se añade 1e-12 para evitar log(0)
+        # 2. Derivada parcial con respecto a 'b'
+        # d/db [b * ln(x)] = ln(x)
+        J[:, 1] = log_x
 
-        # Derivada parcial con respecto a 'c'
-        J[:, 2] = 1.0
-
-        # Derivada parcial con respecto a 'alpha'
-        # Nota: np.log() es el logaritmo natural
-        J[:, 3] = a * (x**alpha) * np.log(x + 1e-12) # Se añade 1e-12 para evitar log(0)
+        # 3. Derivada parcial con respecto a 'alpha'
+        # d/d_alpha [a * x^alpha] = a * x^alpha * ln(x)
+        # Nota: Ahora ocupa el índice 2 (la tercera columna)
+        J[:, 2] = a * (x**alpha) * log_x 
 
         return J
     return func_exp, func_log, jac_func_exp, jac_func_log
@@ -675,8 +689,13 @@ def _(
         if switch_log.value:
             fig.update_xaxes(title="Fluence_1E19_n_cm2 (log scale)", type="log", range=rangex_Fl_log)
         else:
-            fig.update_xaxes(title="Fluence_1E19_n_cm2",type="linear", range=rangex_Fl)
-        fig.update_yaxes(title="DT41J_Celsius", range=rangey_41j)
+            fig.update_xaxes(title=r"$\phi (10^{19} n/cm^{2})$",type="linear", range=rangex_Fl)
+        fig.update_yaxes(title=r"$\Delta T_{41J} ºC$", range=rangey_41j)
+        fig.update_layout(
+            font=dict(
+                size=20  # Set the default font size for the whole plot
+            )
+        )
         return fig, popt
     return (plt_conf_k,)
 
