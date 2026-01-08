@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.11"
+__generated_with = "0.18.4"
 app = marimo.App(width="medium")
 
 
@@ -21,6 +21,29 @@ def _(mo, np, pl):
     file = mo.notebook_location() / "public" / "df_plotter.csv"
     df_plotter = pl.read_csv(str(file))
     return Cu2, Fl, Ni2, df_plotter
+
+
+@app.cell
+def _(mo):
+    mode_sw = mo.ui.switch(label="Metric", value=True,)
+    return (mode_sw,)
+
+
+@app.cell
+def _(mo, mode_sw, title):
+    mo.hstack([mode_sw, title], justify="start")
+    return
+
+
+@app.cell
+def _(mo, mode_sw):
+    if mode_sw.value:
+        title = mo.md("## AUC")
+        metic = "AUC"
+    else:
+        title = mo.md("## Manhattan dsitance")
+        metic = "Manhattan distance"
+    return metic, title
 
 
 @app.cell
@@ -55,6 +78,13 @@ def _(Mnslide, Pslide, Tslide, pfdrop):
 
 
 @app.cell
+def _(np):
+    def manhattan_dsitance(c1, c2):
+        return np.sum(np.abs(c1 - c2))
+    return (manhattan_dsitance,)
+
+
+@app.cell
 def _(
     Cu2,
     Fl,
@@ -66,7 +96,10 @@ def _(
     df_and_dist,
     df_plotter,
     go,
+    manhattan_dsitance,
+    metic,
     mo,
+    mode_sw,
     np,
     pf,
     simpson,
@@ -74,21 +107,45 @@ def _(
     ZT = np.zeros((len(Ni2), len(Cu2)))
     c=np.arange(0,4000,250)
 
-    for nii in range(len(Ni2)):
-        for cui in range(len(Cu2)):
-            ZT[nii, cui] = simpson(y=TTS_eval(pf, Cu2[cui], Ni2[nii], Mn, P, T, Fl), x=Fl*1e-23)
+    # point = [0.22, 0.04] # Ni, Cu
+    point = [0.6, 0.15] # Ni, Cu
+    # point = [1, 0.25] # Ni, Cu
+
+    if mode_sw.value:
+        for nii in range(len(Ni2)):
+            for cui in range(len(Cu2)):
+                ZT[nii, cui] = simpson(y=TTS_eval(pf, Cu2[cui], Ni2[nii], Mn, P, T, Fl), x=Fl*1e-23)
+    else:
+        TTS_point = TTS_eval(pf, point[1], point[0], Mn, P, T, Fl)
+        for nii in range(len(Ni2)):
+            for cui in range(len(Cu2)):
+                TTS_current = TTS_eval(pf, Cu2[cui], Ni2[nii], Mn, P, T, Fl)
+                ZT[nii, cui] = manhattan_dsitance(TTS_point, TTS_current)
 
 
     fig = go.Figure()
     _max = int(np.max(ZT))
-    fig.add_trace(go.Contour(z = ZT,x=Cu2, y=Ni2,  contours_coloring='lines',colorscale="Sunsetdark", contours=dict(showlabels=True, start=0, end=_max, size=200),showscale=False, hoverinfo="none"))
-    fig.add_trace(go.Scatter(x=df_plotter["Cu"], y=df_plotter["Ni"], mode="markers", opacity=0.3, 
-                                 marker=dict(color="grey",colorscale='Sunsetdark', # <--- Define la paleta de color para AUC
-                colorbar=dict(
-                    title='AUC', # Título de la barra de color
-                    # Puedes ajustar los ticks si lo necesitas
-                    # tickvals=[0, 100, 200, 300, 400]
-                ), showscale=True,line=dict(width=0.3, color='DarkSlateGrey'),cmin=np.min(ZT),cmax=np.max(ZT)),hoverinfo="none", showlegend=False))
+
+
+
+    fig.add_trace(go.Scatter(x=df_plotter["Cu"], y=df_plotter["Ni"], mode="markers", opacity=0.8, 
+                                 marker=dict(size=8,color="#181818", colorscale='Sunsetdark',
+                    colorbar=dict(
+                        title=metic, # Título de la barra de color
+                        # Puedes ajustar los ticks si lo necesitas
+                        # tickvals=[0, 100, 200, 300, 400]
+                    ), showscale=False,
+                                                 line=dict(width=0.3, color='DarkSlateGrey'), cmin=np.min(ZT),cmax=np.max(ZT)),hoverinfo="none", showlegend=False))
+    if mode_sw.value:
+        fig.add_trace(go.Contour(z = ZT,x=Cu2, y=Ni2,  contours_coloring='none', contours=dict(coloring='lines',showlabels=True,labelfont=dict(
+                    size=24,
+                    color="black"
+                ), start=0, end=_max, size=200),colorscale='Sunsetdark',line=dict(color="black", width=3),showscale=False, hoverinfo="none"))
+    else: 
+        fig.add_trace(go.Contour(z = ZT,x=Cu2, y=Ni2,  contours_coloring='none', contours=dict(coloring='lines',showlabels=True,labelfont=dict(
+                    size=24,
+                    color="black"
+                ), start=0, end=_max, size = 1000),colorscale='Sunsetdark',line=dict(color="black", width=3),showscale=False, hoverinfo="none"))
     aux_df, dist = df_and_dist(df_plotter, P, Mn, T, pf)
     if aux_df.shape[0] != 0:
 
@@ -99,7 +156,7 @@ def _(
                         title='AUC', # Título de la barra de color
                         # Puedes ajustar los ticks si lo necesitas
                         # tickvals=[0, 100, 200, 300, 400]
-                    ), showscale=True,
+                    ), showscale=False,
                                                  line=dict(width=0.3, color='DarkSlateGrey'), cmin=np.min(ZT),cmax=np.max(ZT)),
                                      customdata=AUC,
                                      hovertemplate=(
@@ -107,9 +164,40 @@ def _(
                     "<b>Y:</b> %{y:.2f}<br>" +  # Muestra el valor Y, formateado a 2 decimales
                     "<b>AUC:</b> %{customdata:.2f}<extra></extra>" ), 
                                  showlegend=False))
-    fig.update_layout(title=f"Cu-Ni [{pf}] -- AUC", xaxis_title="Cu", yaxis_title="Ni")
+    if not mode_sw.value:
+
+        fig.add_trace(go.Scatter(x=[point[1]], y=[point[0]], mode="markers", marker=dict(color="red", size=12, symbol="x"), hoverinfo="skip", showlegend=False))
+        # fig.add_annotation(
+        #     x=point[1],              # Coordenada X del punto a señalar
+        #     y=point[0],             # Coordenada Y del punto a señalar
+        #     # text="Punto Máximo", # Texto de la etiqueta
+        #     showarrow=True,   # Importante: activa la flecha
+        #     arrowhead=2,      # Estilo de la punta (prueba del 1 al 8)
+        #     arrowsize=0.8,      # Tamaño de la flecha
+        #     arrowwidth=6,     # Grosor de la línea de la flecha
+        #     arrowcolor="blue", # Color de la flecha
+        #     ax=-40,           # Desplazamiento en X (píxeles) para la cola
+        #     ay=-50,           # Desplazamiento en Y (píxeles) para la cola
+        #     # Estilo del texto (opcional)
+        #     font=dict(
+        #         size=12,
+        #         color="black"
+        #     ),
+        #     # bgcolor="#ff7f0e", # Color de fondo del texto
+        #     opacity=1
+        # )
+    fig.update_layout(title=f"Cu-Ni [{pf}] -- {metic}", xaxis_title="<b>Cu</b>", yaxis_title="<b>Ni</b>")
     fig.update_layout(xaxis=dict(range=[0,np.max(Cu2)]), yaxis=dict(range=[0,np.max(Ni2)]))
-    fig.update_layout(width=900, height=900)
+    if mode_sw.value:
+        fig.update_layout(width=970, height=900)
+    else:
+        fig.update_layout(width=970, height=900)
+    fig.update_layout(
+        font=dict(
+            size=25  # Set the default font size for the whole plot
+        )
+    )
+    fig.update_layout(showlegend=False)
     mofig = mo.ui.plotly(fig)
     return (mofig,)
 
@@ -146,7 +234,10 @@ def _():
     import polars as pl
     from scipy.integrate import simpson
     from itertools import product
+    import plotly.io as pio
 
+    # Set 'simple_white' as the default theme for all future plots
+    pio.templates.default = "plotly_white"
     return np, pl, simpson
 
 
